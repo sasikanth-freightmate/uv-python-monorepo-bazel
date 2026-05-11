@@ -70,6 +70,10 @@ Bazel + bzlmod Python monorepo using `aspect_rules_py` for Python rules and `rul
 
 All build, run, test, lint, and dependency-locking operations go through `bazel`.
 
+## Dev container policy
+
+**The compose stack in `.devcontainer/` is managed by DevPod.** Do not run `docker compose` (up/down/build/config/logs/etc.) directly against `.devcontainer/docker-compose.yml`. Use `devpod up`, `devpod stop`, and `devpod up --recreate` instead. Running raw compose commands can desync DevPod's state and leak orphan containers/volumes.
+
 ## Common commands
 
 ```bash

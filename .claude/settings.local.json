@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl -s https://raw.githubusercontent.com/aspect-build/rules_py/main/examples/uv_pip_compile/requirements.txt)",
+      "WebFetch(domain:registry.bazel.build)",
+      "WebFetch(domain:endoflife.date)",
+      "Bash(bazel build *)",
+      "Bash(bazel test *)"
+    ]
+  }
+}

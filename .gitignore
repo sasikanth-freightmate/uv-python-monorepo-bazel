@@ -36,5 +36,8 @@ __pycache__/
 *.pyc
 *.pyo
 
+# --- DevContainer ---
+.devcontainer/.env
+
 # --- macOS ---
 .DS_Store

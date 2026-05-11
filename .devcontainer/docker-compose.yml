@@ -1,0 +1,25 @@
+services:
+  dev:
+    build:
+      context: ../
+      dockerfile: .devcontainer/Dockerfile
+    environment:
+      - ENV=development
+      - USE_BAZEL_VERSION=9.1.0
+    volumes:
+      - ../:/workspaces/uv-python-monorepo-bazel
+      - ~/.ssh:/home/vscode/.ssh
+      - ~/.gitconfig:/home/vscode/.gitconfig
+      - ~/.claude:/home/vscode/.claude
+      - ~/.claude.json:/home/vscode/.claude.json
+      - ~/.bash_history:/home/vscode/.bash_history
+      - ~/.zsh_history:/home/vscode/.zsh_history
+      - bazel_cache:/home/vscode/.cache/bazel
+      - bazelisk_cache:/home/vscode/.cache/bazelisk
+      - vscode-server:/home/vscode/.vscode-server
+    command: sleep infinity
+
+volumes:
+  bazel_cache:
+  bazelisk_cache:
+  vscode-server:

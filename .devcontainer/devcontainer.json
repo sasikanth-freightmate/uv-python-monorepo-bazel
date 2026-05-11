@@ -1,0 +1,47 @@
+{
+  "name": "uv-python-monorepo-bazel",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "dev",
+  "workspaceFolder": "/workspaces/uv-python-monorepo-bazel",
+  "remoteUser": "vscode",
+  "shutdownAction": "stopCompose",
+  "postCreateCommand": {
+    "bazel-check": "bazelisk version",
+    "python-check": "python3 --version"
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "bazel.executable": "bazelisk",
+        "python.defaultInterpreterPath": "/usr/bin/python3",
+        "[python]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "charliermarsh.ruff"
+        },
+        "files.exclude": {
+          "**/bazel-bin": true,
+          "**/bazel-out": true,
+          "**/bazel-testlogs": true,
+          "**/bazel-uv-python-monorepo-bazel": true,
+          "**/__pycache__": true
+        },
+        "files.watcherExclude": {
+          "**/bazel-bin/**": true,
+          "**/bazel-out/**": true,
+          "**/bazel-testlogs/**": true,
+          "**/bazel-uv-python-monorepo-bazel/**": true
+        }
+      },
+      "extensions": [
+        "anthropic.claude-code",
+        "BazelBuild.vscode-bazel",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "tamasfe.even-better-toml",
+        "redhat.vscode-yaml",
+        "eamodio.gitlens"
+      ]
+    }
+  }
+}

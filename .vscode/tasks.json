@@ -1,0 +1,43 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Bazel: Build All",
+      "type": "shell",
+      "command": "bazel build //...",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Bazel: Test All",
+      "type": "shell",
+      "command": "bazel test //...",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Run: greeter",
+      "type": "shell",
+      "command": "bazel run //apps/greeter",
+      "problemMatcher": []
+    },
+    {
+      "label": "Run: hello",
+      "type": "shell",
+      "command": "bazel run //apps/hello",
+      "problemMatcher": []
+    },
+    {
+      "label": "Regenerate requirements.txt",
+      "type": "shell",
+      "command": "bazel run //:generate_requirements_txt",
+      "problemMatcher": []
+    }
+  ]
+}
