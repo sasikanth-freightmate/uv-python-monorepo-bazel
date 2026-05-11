@@ -1,3 +1,17 @@
+load("@aspect_rules_py//py:defs.bzl", "py_library", "py_venv")
 load("@rules_uv//uv:pip.bzl", "pip_compile")
 
 pip_compile(name = "generate_requirements_txt")
+
+py_library(
+    name = "all_deps",
+    deps = [
+        "@pypi//cowsay",
+        "@pypi//rich",
+    ],
+)
+
+py_venv(
+    name = "venv",
+    deps = [":all_deps"],
+)

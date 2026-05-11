@@ -7,13 +7,13 @@
   "shutdownAction": "stopCompose",
   "postCreateCommand": {
     "bazel-check": "bazelisk version",
-    "python-check": "python3 --version"
+    "python-check": "python3 --version",
+    "venv": "bazelisk run //:venv"
   },
   "customizations": {
     "vscode": {
       "settings": {
         "bazel.executable": "bazelisk",
-        "python.defaultInterpreterPath": "/usr/bin/python3",
         "[python]": {
           "editor.formatOnSave": true,
           "editor.defaultFormatter": "charliermarsh.ruff"

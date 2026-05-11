@@ -82,7 +82,12 @@ bazel build //...                          # build everything
 bazel test //...                           # run all test targets
 bazel run //apps/hello                     # run the hello binary
 bazel run //apps/greeter                   # run the greeter binary
+bazel run //:venv                          # materialize .venv/ for IDE / Pylance (re-run after requirements.txt changes)
 ```
+
+## IDE / Pylance setup
+
+`bazel run //:venv` materializes a real virtualenv at `./.venv/` populated from the `@pypi` hub. VS Code is preconfigured ([.vscode/settings.json](.vscode/settings.json)) to use `./.venv/bin/python` as the interpreter, so Pylance resolves PyPI imports (`cowsay`, `rich`, …) and workspace imports (`from libs.common.greetings import …`) without violating the Bazel-only policy. The venv is IDE-only — `bazel build/test/run` continue to use the hermetic toolchain. Re-run `bazel run //:venv` after editing `:all_deps` in [BUILD.bazel](BUILD.bazel) or regenerating `requirements.txt`, then reload the VS Code window.
 
 ## Adding a new app
 
