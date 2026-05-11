@@ -1,0 +1,40 @@
+# --- Bazel convenience symlinks (created at workspace root after a build) ---
+bazel-bin
+bazel-out
+bazel-testlogs
+bazel-uv-python-monorepo-bazel
+# Catch-all for any other bazel-* symlinks (renamed workspace, etc.)
+bazel-*
+
+# --- Bazel local state / per-user config / caches ---
+.bazelclean
+.bazel/
+user.bazelrc
+.bazelrc.user
+.bazelrc.local
+.bazel-cache/
+.bazel-disk-cache/
+.bazel-repo-cache/
+
+# --- Bazel IDE plugin state ---
+# IntelliJ Bazel plugin
+.ijwb/
+# CLion Bazel plugin
+.clwb/
+# Aspect CLI workspace state
+.aspect/
+# Build Server Protocol
+.bsp/
+# bazel-bsp
+.bazelbsp/
+# generated for clangd by hedron_compile_commands
+compile_commands.json
+
+# --- Python ---
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# --- macOS ---
+.DS_Store

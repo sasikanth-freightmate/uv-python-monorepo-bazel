@@ -1,0 +1,26 @@
+load("@aspect_rules_py//py:defs.bzl", "py_binary", "py_library", "py_test")
+
+py_library(
+    name = "greeter_lib",
+    srcs = ["main.py"],
+    imports = ["../.."],
+    deps = [
+        "//libs/common",
+        "//libs/mathutils",
+        "@pypi//rich",
+    ],
+)
+
+py_binary(
+    name = "greeter",
+    srcs = ["main.py"],
+    main = "main.py",
+    deps = [":greeter_lib"],
+)
+
+py_test(
+    name = "greeter_test",
+    srcs = ["main_test.py"],
+    main = "main_test.py",
+    deps = [":greeter_lib"],
+)

@@ -1,0 +1,18 @@
+load("@aspect_rules_py//py:defs.bzl", "py_library", "py_test")
+
+py_library(
+    name = "mathutils",
+    srcs = [
+        "__init__.py",
+        "arithmetic.py",
+    ],
+    imports = ["../.."],
+    visibility = ["//visibility:public"],
+)
+
+py_test(
+    name = "arithmetic_test",
+    srcs = ["arithmetic_test.py"],
+    main = "arithmetic_test.py",
+    deps = [":mathutils"],
+)

@@ -1,0 +1,18 @@
+load("@aspect_rules_py//py:defs.bzl", "py_library", "py_test")
+
+py_library(
+    name = "common",
+    srcs = [
+        "__init__.py",
+        "greetings.py",
+    ],
+    imports = ["../.."],
+    visibility = ["//visibility:public"],
+)
+
+py_test(
+    name = "greetings_test",
+    srcs = ["greetings_test.py"],
+    main = "greetings_test.py",
+    deps = [":common"],
+)

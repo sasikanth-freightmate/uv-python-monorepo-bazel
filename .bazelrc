@@ -1,0 +1,3 @@
+# Bzlmod is the default in Bazel 9; no flag needed.
+build --incompatible_strict_action_env
+test --test_output=errors

@@ -1,0 +1,25 @@
+load("@aspect_rules_py//py:defs.bzl", "py_binary", "py_library", "py_test")
+
+py_library(
+    name = "hello_lib",
+    srcs = ["main.py"],
+    imports = ["../.."],
+    deps = [
+        "//libs/common",
+        "@pypi//cowsay",
+    ],
+)
+
+py_binary(
+    name = "hello",
+    srcs = ["main.py"],
+    main = "main.py",
+    deps = [":hello_lib"],
+)
+
+py_test(
+    name = "hello_test",
+    srcs = ["main_test.py"],
+    main = "main_test.py",
+    deps = [":hello_lib"],
+)
