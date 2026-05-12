@@ -1,0 +1,8 @@
+"""Linter aspects.
+
+In its own package so loading-time symbols don't bloat unrelated builds.
+"""
+
+package(default_visibility = ["//:__subpackages__"])
+
+exports_files(["linters.bzl"])

@@ -1,3 +1,14 @@
 # Bzlmod is the default in Bazel 9; no flag needed.
 build --incompatible_strict_action_env
 test --test_output=errors
+
+# Warn when githooks aren't enabled.
+build --workspace_status_command=githooks/check-config.sh
+
+# Lint config: `bazel build --config=lint //...` runs ruff + ty aspects.
+build:lint --aspects=//tools/lint:linters.bzl%ruff
+build:lint --aspects=//tools/lint:linters.bzl%ty
+build:lint --output_groups=+rules_lint_human,+rules_lint_report
+build:lint --remote_download_regex='.*AspectRulesLint.*'
+
+try-import %workspace%/user.bazelrc

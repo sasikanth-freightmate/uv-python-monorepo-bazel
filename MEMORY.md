@@ -87,7 +87,16 @@ bazel run //:venv                          # materialize .venv/ for IDE / Pylanc
 
 ## IDE / Pylance setup
 
-`bazel run //:venv` materializes a real virtualenv at `./.venv/` populated from the `@pypi` hub. VS Code is preconfigured ([.vscode/settings.json](.vscode/settings.json)) to use `./.venv/bin/python` as the interpreter, so Pylance resolves PyPI imports (`cowsay`, `rich`, …) and workspace imports (`from libs.common.greetings import …`) without violating the Bazel-only policy. The venv is IDE-only — `bazel build/test/run` continue to use the hermetic toolchain. Re-run `bazel run //:venv` after editing `:all_deps` in [BUILD.bazel](BUILD.bazel) or regenerating `requirements.txt`, then reload the VS Code window.
+`bazel run //:venv` materializes a real virtualenv at `./.venv/` populated from the `@pypi` hub. VS Code is preconfigured ([.vscode/settings.json](.vscode/settings.json)) to use `./.venv/bin/python` as the interpreter, so Pylance resolves PyPI imports (`cowsay`, `rich`, …) and workspace imports (`from libs.common.greetings import …`) without violating the Bazel-only policy. The venv is IDE-only — `bazel build/test/run` continue to use the hermetic toolchain.
+
+**Re-run `bazel run //:venv` whenever any of these change, then reload the VS Code window:**
+
+- [MODULE.bazel](MODULE.bazel) (new or upgraded `bazel_dep`s shift the external-repo layout the inner symlinks resolve through)
+- [requirements.txt](requirements.txt) / [requirements.in](requirements.in)
+- `:all_deps` in [BUILD.bazel](BUILD.bazel)
+- After `bazel clean` (wipes the runfiles tree the `.venv` symlink points into)
+
+Symptom of a stale venv: `from rich.console import Console` (or any pip dep) fails with `ModuleNotFoundError` or Pylance `reportMissingImports`, even though `.venv/lib/.../site-packages/rich/` appears to exist — the inner files are dangling symlinks into a bazel-out path that no longer matches the current external layout. `bazel run //:venv` is the only command needed to fix it.
 
 ## Adding a new app
 

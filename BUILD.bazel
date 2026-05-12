@@ -3,6 +3,11 @@ load("@rules_uv//uv:pip.bzl", "pip_compile")
 
 pip_compile(name = "generate_requirements_txt")
 
+exports_files([
+    "ruff.toml",
+    "ty.toml",
+])
+
 py_library(
     name = "all_deps",
     deps = [

@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Pre-commit hook:
+#   1. Run //tools/format on staged files; abort if it produced a diff so the
+#      user can re-stage formatted content.
+#   2. Run hygiene checks: trailing whitespace, missing trailing newline,
+#      unresolved merge-conflict markers.
+#
+# Prefer the prebuilt formatter in bazel-bin to avoid a `bazel run` round-trip
+# on every commit; fall back to `bazel run //tools/format` if needed.
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Collect staged adds/modifies (null-delimited handles spaces/newlines).
+mapfile -d '' -t STAGED < <(git diff --cached --diff-filter=AM --name-only -z)
+if (( ${#STAGED[@]} == 0 )); then
+    exit 0
+fi
+
+echo "pre-commit: formatting ${#STAGED[@]} staged file(s)..."
+
+FORMATTER="bazel-bin/tools/format/format"
+if [[ -x "$FORMATTER" ]]; then
+    "$FORMATTER" --mode fix "${STAGED[@]}" >/dev/null 2>&1 || true
+else
+    # First-time setup: build and run via bazel.
+    bazel run --ui_event_filters=-info,-stdout,-stderr //tools/format -- --mode fix "${STAGED[@]}" >/dev/null 2>&1 || true
+fi
+
+# If formatter rewrote any staged file, abort and ask the user to re-stage.
+if ! git diff --quiet -- "${STAGED[@]}"; then
+    echo
+    echo "pre-commit: FAIL — formatter modified staged files:"
+    git diff --stat -- "${STAGED[@]}" | sed 's/^/  /'
+    echo
+    echo "Review the changes, then 'git add' and commit again."
+    exit 1
+fi
+
+# Hygiene checks on staged content.
+fail=0
+for f in "${STAGED[@]}"; do
+    # Skip binaries and anything outside the working tree.
+    [[ -f "$f" ]] || continue
+    if ! git diff --cached --numstat -- "$f" | awk '{ if ($1 == "-" || $2 == "-") exit 1 }'; then
+        continue  # binary
+    fi
+
+    while IFS= read -r line; do
+        case "$line" in
+            "<<<<<<< "*|"======="|">>>>>>> "*)
+                echo "pre-commit: merge-conflict marker in $f"
+                fail=1
+                ;;
+        esac
+    done < "$f"
+
+    if grep -nP ' +$' "$f" >/dev/null 2>&1; then
+        echo "pre-commit: trailing whitespace in $f:"
+        grep -nP ' +$' "$f" | sed 's/^/  /'
+        fail=1
+    fi
+
+    if [[ -s "$f" ]] && [[ "$(tail -c1 "$f"; echo .)" != $'\n.' ]]; then
+        echo "pre-commit: missing final newline in $f"
+        fail=1
+    fi
+done
+
+if (( fail )); then
+    echo
+    echo "pre-commit: FAIL — fix the above and re-stage."
+    exit 1
+fi
+
+exit 0
