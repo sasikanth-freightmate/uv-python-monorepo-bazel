@@ -6,6 +6,9 @@ services:
     environment:
       - ENV=development
       - USE_BAZEL_VERSION=9.1.0
+      - TEMPORAL_ADDRESS=temporal:7233
+    depends_on:
+      - temporal
     volumes:
       - ../:/workspaces/uv-python-monorepo-bazel
       - ~/.ssh:/home/vscode/.ssh
@@ -18,6 +21,17 @@ services:
       - bazelisk_cache:/home/vscode/.cache/bazelisk
       - vscode-server:/home/vscode/.vscode-server
     command: sleep infinity
+
+  # Temporal dev server: single binary, in-memory persistence, bundled Web UI.
+  # gRPC frontend on 7233 (workers connect here), Web UI on http://localhost:8233.
+  # For persistence across restarts, mount a volume and add:
+  #   --db-filename /home/temporal/temporal.db   (and a temporal_data volume)
+  temporal:
+    image: temporalio/temporal:latest
+    command: server start-dev --ip 0.0.0.0
+    ports:
+      - "7233:7233"
+      - "8233:8233"
 
 volumes:
   bazel_cache:

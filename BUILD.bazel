@@ -13,6 +13,7 @@ py_library(
     deps = [
         "@pypi//cowsay",
         "@pypi//rich",
+        "@pypi//temporalio",
     ],
 )
 

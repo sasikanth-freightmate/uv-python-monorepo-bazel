@@ -1,0 +1,32 @@
+load("@aspect_rules_py//py:defs.bzl", "py_library", "py_test")
+
+# Layer 1 (your IP): the pure, deterministic graph model. No Temporal dependency,
+# safe to import inside a workflow sandbox, and unit-testable on its own.
+py_library(
+    name = "workflow_engine",
+    srcs = [
+        "__init__.py",
+        "model.py",
+    ],
+    imports = ["../.."],
+    visibility = ["//visibility:public"],
+)
+
+# Layer 2 (adopted): the Temporal interpreter that durably executes a Graph.
+py_library(
+    name = "workflow_engine_temporal",
+    srcs = ["workflow.py"],
+    imports = ["../.."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":workflow_engine",
+        "@pypi//temporalio",
+    ],
+)
+
+py_test(
+    name = "model_test",
+    srcs = ["model_test.py"],
+    main = "model_test.py",
+    deps = [":workflow_engine"],
+)
