@@ -22,21 +22,19 @@
       "problemMatcher": []
     },
     {
-      "label": "Run: greeter",
-      "type": "shell",
-      "command": "bazel run //apps/greeter",
-      "problemMatcher": []
-    },
-    {
-      "label": "Run: hello",
-      "type": "shell",
-      "command": "bazel run //apps/hello",
-      "problemMatcher": []
-    },
-    {
       "label": "Regenerate requirements.txt",
       "type": "shell",
       "command": "bazel run //:generate_requirements_txt",
+      "problemMatcher": []
+    },
+    {
+      "label": "Sync requirements on startup",
+      "type": "shell",
+      "command": "ibazel run //:venv",
+      "isBackground": true,
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
       "problemMatcher": []
     }
   ]

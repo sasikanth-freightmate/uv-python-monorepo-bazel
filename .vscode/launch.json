@@ -2,6 +2,20 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "flow-ui: dev",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm --dir apps/flow-ui dev",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "flow-ui: server (Bazel)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "bazel run //apps/flow-ui:server",
+      "cwd": "${workspaceFolder}"
+    },
+    {
       "name": "Workflows: worker",
       "type": "debugpy",
       "request": "launch",

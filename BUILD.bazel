@@ -1,5 +1,8 @@
+load("@npm//:defs.bzl", "npm_link_all_packages")
 load("@aspect_rules_py//py:defs.bzl", "py_library", "py_venv")
 load("@rules_uv//uv:pip.bzl", "pip_compile")
+
+npm_link_all_packages()
 
 pip_compile(name = "generate_requirements_txt")
 

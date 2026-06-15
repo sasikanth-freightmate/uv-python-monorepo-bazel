@@ -39,5 +39,11 @@ __pycache__/
 # --- DevContainer ---
 .devcontainer/.env
 
+# --- Next.js ---
+apps/flow-ui/.next/
+apps/flow-ui/node_modules/
+apps/flow-ui/.swc/
+node_modules/
+
 # --- macOS ---
 .DS_Store

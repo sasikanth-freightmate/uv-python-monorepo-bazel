@@ -1,0 +1,5 @@
+packages:
+  - "apps/flow-ui"
+
+onlyBuiltDependencies:
+  - next

@@ -1,0 +1,52 @@
+load("@aspect_rules_js//contrib/nextjs:defs.bzl", "nextjs_standalone_build", "nextjs_standalone_server")
+load("@aspect_rules_js//js:defs.bzl", "js_library")
+load("@npm//:defs.bzl", "npm_link_all_packages")
+load("@npm//apps/flow-ui:next/package_json.bzl", next_bin = "bin")
+
+npm_link_all_packages()
+
+next_bin.next_binary(
+    name = "next_js_binary",
+    visibility = ["//visibility:public"],
+)
+
+js_library(
+    name = "lib",
+    srcs = glob(
+        [
+            "src/**",
+            "public/**",
+        ],
+        allow_empty = True,
+    ),
+    deps = [
+        ":node_modules/next",
+        ":node_modules/react",
+        ":node_modules/react-dom",
+    ],
+)
+
+js_library(
+    name = "nextjs-css",
+    srcs = ["postcss.config.mjs"],
+    deps = [
+        ":node_modules/@tailwindcss/postcss",
+        ":node_modules/tailwindcss",
+    ],
+)
+
+nextjs_standalone_build(
+    name = "standalone",
+    srcs = [
+        "jsconfig.json",
+        ":lib",
+        ":nextjs-css",
+    ],
+    config = "next.standalone.mjs",
+    next_js_binary = ":next_js_binary",
+)
+
+nextjs_standalone_server(
+    name = "server",
+    app = ":standalone",
+)
