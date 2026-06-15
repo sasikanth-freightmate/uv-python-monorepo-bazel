@@ -7,7 +7,8 @@
       "WebFetch(domain:registry.bazel.build)",
       "WebFetch(domain:endoflife.date)",
       "Bash(bazel build *)",
-      "Bash(bazel test *)"
+      "Bash(bazel test *)",
+      "Bash(devpod stop *)"
     ]
   }
 }

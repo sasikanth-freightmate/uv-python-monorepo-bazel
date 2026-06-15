@@ -1,8 +1,8 @@
 {
-  "name": "uv-python-monorepo-bazel",
+  "name": "fm-flow",
   "dockerComposeFile": "docker-compose.yml",
   "service": "dev",
-  "workspaceFolder": "/workspaces/uv-python-monorepo-bazel",
+  "workspaceFolder": "/workspaces/fm-flow",
   "remoteUser": "vscode",
   "shutdownAction": "stopCompose",
   "postCreateCommand": {
@@ -22,14 +22,14 @@
           "**/bazel-bin": true,
           "**/bazel-out": true,
           "**/bazel-testlogs": true,
-          "**/bazel-uv-python-monorepo-bazel": true,
+          "**/bazel-fm-flow": true,
           "**/__pycache__": true
         },
         "files.watcherExclude": {
           "**/bazel-bin/**": true,
           "**/bazel-out/**": true,
           "**/bazel-testlogs/**": true,
-          "**/bazel-uv-python-monorepo-bazel/**": true
+          "**/bazel-fm-flow/**": true
         }
       },
       "extensions": [

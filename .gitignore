@@ -2,7 +2,7 @@
 bazel-bin
 bazel-out
 bazel-testlogs
-bazel-uv-python-monorepo-bazel
+bazel-fm-flow
 # Catch-all for any other bazel-* symlinks (renamed workspace, etc.)
 bazel-*
 

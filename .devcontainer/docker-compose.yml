@@ -7,10 +7,14 @@ services:
       - ENV=development
       - USE_BAZEL_VERSION=9.1.0
       - TEMPORAL_ADDRESS=temporal:7233
+      - DATABASE_URL=postgres://freightmate:freightmate@postgres:5432/freightmate
     depends_on:
-      - temporal
+      temporal:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     volumes:
-      - ../:/workspaces/uv-python-monorepo-bazel
+      - ../:/workspaces/fm-flow
       - ~/.ssh:/home/vscode/.ssh
       - ~/.gitconfig:/home/vscode/.gitconfig
       - ~/.claude:/home/vscode/.claude
@@ -20,20 +24,69 @@ services:
       - bazel_cache:/home/vscode/.cache/bazel
       - bazelisk_cache:/home/vscode/.cache/bazelisk
       - vscode-server:/home/vscode/.vscode-server
+    networks:
+      - freightmate
     command: sleep infinity
 
-  # Temporal dev server: single binary, in-memory persistence, bundled Web UI.
-  # gRPC frontend on 7233 (workers connect here), Web UI on http://localhost:8233.
-  # For persistence across restarts, mount a volume and add:
-  #   --db-filename /home/temporal/temporal.db   (and a temporal_data volume)
+  postgres:
+    image: postgres:17
+    environment:
+      - POSTGRES_USER=freightmate
+      - POSTGRES_PASSWORD=freightmate
+      - POSTGRES_DB=freightmate
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - freightmate
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U freightmate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Temporal server backed by PostgreSQL.
+  # auto-setup creates the temporal and temporal_visibility schemas on first boot.
+  # Web UI is not bundled; run temporalio/ui separately if needed.
   temporal:
-    image: temporalio/temporal:latest
-    command: server start-dev --ip 0.0.0.0
-    ports:
-      - "7233:7233"
-      - "8233:8233"
+    image: temporalio/auto-setup:latest
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=freightmate
+      - POSTGRES_PWD=freightmate
+      - POSTGRES_SEEDS=postgres
+      - DBNAME=temporal
+      - VISIBILITY_DBNAME=temporal_visibility
+      - BIND_ON_IP=0.0.0.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - freightmate
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "127.0.0.1:7233", "cluster", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  temporal-ui:
+    image: temporalio/ui:latest
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+    depends_on:
+      temporal:
+        condition: service_healthy
+    networks:
+      - freightmate
 
 volumes:
   bazel_cache:
   bazelisk_cache:
   vscode-server:
+  postgres_data:
+
+networks:
+  freightmate:
+    external: true

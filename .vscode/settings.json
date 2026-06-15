@@ -3,7 +3,7 @@
     "**/bazel-bin": true,
     "**/bazel-out": true,
     "**/bazel-testlogs": true,
-    "**/bazel-uv-python-monorepo-bazel": true,
+    "**/bazel-fm-flow": true,
     "**/__pycache__": true,
     "**/*.pyc": true,
     "**/.DS_Store": true
@@ -12,7 +12,7 @@
     "**/bazel-bin": true,
     "**/bazel-out": true,
     "**/bazel-testlogs": true,
-    "**/bazel-uv-python-monorepo-bazel": true,
+    "**/bazel-fm-flow": true,
     "**/__pycache__": true,
     "**/MODULE.bazel.lock": true
   },
@@ -20,7 +20,7 @@
     "**/bazel-bin/**": true,
     "**/bazel-out/**": true,
     "**/bazel-testlogs/**": true,
-    "**/bazel-uv-python-monorepo-bazel/**": true
+    "**/bazel-fm-flow/**": true
   },
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
   "python.analysis.extraPaths": [

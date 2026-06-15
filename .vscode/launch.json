@@ -1,0 +1,31 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Workflows: worker",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/apps/workflows/worker.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "TEMPORAL_ADDRESS": "temporal:7233",
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Workflows: starter",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/apps/workflows/starter.py",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "TEMPORAL_ADDRESS": "temporal:7233",
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "console": "integratedTerminal"
+    }
+  ]
+}
