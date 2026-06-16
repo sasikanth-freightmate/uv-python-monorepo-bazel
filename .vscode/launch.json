@@ -2,17 +2,10 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "flow-ui: dev",
+      "name": "flow-ui: server",
       "type": "node-terminal",
       "request": "launch",
-      "command": "pnpm --dir apps/flow-ui dev",
-      "cwd": "${workspaceFolder}"
-    },
-    {
-      "name": "flow-ui: prod server (Bazel)",
-      "type": "node-terminal",
-      "request": "launch",
-      "command": "bazel run //apps/flow-ui:start",
+      "command": "ibazel run //apps/flow-ui:start",
       "cwd": "${workspaceFolder}"
     },
     {
