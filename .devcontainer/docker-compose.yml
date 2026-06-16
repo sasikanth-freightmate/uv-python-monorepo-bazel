@@ -8,10 +8,13 @@ services:
       - USE_BAZEL_VERSION=9.1.0
       - TEMPORAL_ADDRESS=temporal:7233
       - DATABASE_URL=postgres://freightmate:freightmate@postgres:5432/freightmate
+      - REDIS_URL=redis://redis:6379
     depends_on:
       temporal:
         condition: service_healthy
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     volumes:
       - ../:/workspaces/fm-flow
@@ -40,6 +43,19 @@ services:
       - freightmate
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U freightmate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7
+    volumes:
+      - redis_data:/data
+    networks:
+      - freightmate
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -86,6 +102,7 @@ volumes:
   bazelisk_cache:
   vscode-server:
   postgres_data:
+  redis_data:
 
 networks:
   freightmate:
