@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@fm-flow/ui-components": "workspace:*",
     "next": "15.2.6",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"

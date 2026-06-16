@@ -8,7 +8,9 @@
       "WebFetch(domain:endoflife.date)",
       "Bash(bazel build *)",
       "Bash(bazel test *)",
-      "Bash(devpod stop *)"
+      "Bash(devpod stop *)",
+      "WebFetch(domain:api.anthropic.com)",
+      "Read(//tmp/design-bundle/fm-flow/project/app/**)"
     ]
   }
 }

@@ -8,5 +8,6 @@ const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
   outputFileTracingRoot,
+  transpilePackages: ['@fm-flow/ui-components'],
 }
 export default nextConfig

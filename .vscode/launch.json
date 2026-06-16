@@ -9,10 +9,10 @@
       "cwd": "${workspaceFolder}"
     },
     {
-      "name": "flow-ui: server (Bazel)",
+      "name": "flow-ui: prod server (Bazel)",
       "type": "node-terminal",
       "request": "launch",
-      "command": "bazel run //apps/flow-ui:server",
+      "command": "bazel run //apps/flow-ui:start",
       "cwd": "${workspaceFolder}"
     },
     {

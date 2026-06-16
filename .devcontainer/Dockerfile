@@ -28,3 +28,5 @@ RUN mkdir -p /home/vscode/.cache/bazel /home/vscode/.cache/bazelisk /home/vscode
     && chown -R vscode:vscode /home/vscode/.cache /home/vscode/.vscode-server
 
 USER vscode
+
+RUN curl -fsSL https://claude.ai/install.sh | NONINTERACTIVE=1 bash

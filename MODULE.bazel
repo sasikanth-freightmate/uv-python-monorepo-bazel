@@ -26,6 +26,7 @@ npm.npm_translate_lock(
         "//:package.json",
         "//:pnpm-workspace.yaml",
         "//apps/flow-ui:package.json",
+        "//packages/ui-components:package.json",
     ],
     npmrc = "//:.npmrc",
     pnpm_lock = "//:pnpm-lock.yaml",

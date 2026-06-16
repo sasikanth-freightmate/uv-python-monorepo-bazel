@@ -1,3 +1,4 @@
 node_modules
 apps/flow-ui/node_modules
 apps/flow-ui/.next
+packages/ui-components/node_modules

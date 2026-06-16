@@ -1,0 +1,14 @@
+load("@aspect_rules_js//npm:defs.bzl", "npm_package")
+load("@npm//:defs.bzl", "npm_link_all_packages")
+
+npm_link_all_packages()
+
+# First-party workspace package: aspect_rules_js links this into the virtual
+# store via the conventional ":pkg" target referenced from the lockfile.
+npm_package(
+    name = "pkg",
+    srcs = [
+        "package.json",
+    ] + glob(["src/**"]),
+    visibility = ["//visibility:public"],
+)

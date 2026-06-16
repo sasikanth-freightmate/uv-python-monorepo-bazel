@@ -1,1 +1,33 @@
 @import "tailwindcss";
+@import "@fm-flow/ui-components/styles.css";
+
+/* Scan the shared component package so its Tailwind utilities are generated. */
+@source "../../../../packages/ui-components/src/**/*.{js,jsx}";
+
+/* FreightMate brand tokens — available as bg-signal, text-ink, etc. */
+@theme {
+  --color-signal: #0E6EFF;
+  --color-signal-hover: #0A5CDB;
+  --color-midnight: #000029;
+  --color-periwinkle: #7979DD;
+  --color-ink: #181B22;
+  --color-canvas: #F4F5F7;
+  --color-rail: #0E1116;
+  --color-success: #10905C;
+  --color-error: #E5484D;
+  --color-warn: #DD8400;
+
+  --font-sans: 'Hanken Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; }
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  color: #181B22;
+  background: #F4F5F7;
+}
+input, textarea, select, button { font-family: inherit; }
+::selection { background: #cfe1ff; }

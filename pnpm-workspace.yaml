@@ -1,5 +1,6 @@
 packages:
   - "apps/flow-ui"
+  - "packages/ui-components"
 
 onlyBuiltDependencies:
   - next

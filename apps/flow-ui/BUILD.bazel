@@ -1,5 +1,7 @@
-load("@aspect_rules_js//contrib/nextjs:defs.bzl", "nextjs_standalone_build", "nextjs_standalone_server")
-load("@aspect_rules_js//js:defs.bzl", "js_library")
+load("@aspect_bazel_lib//lib:copy_to_directory.bzl", "copy_to_directory")
+load("@aspect_bazel_lib//lib:directory_path.bzl", "directory_path")
+load("@aspect_rules_js//contrib/nextjs:defs.bzl", "nextjs_standalone_build")
+load("@aspect_rules_js//js:defs.bzl", "js_binary", "js_library", "js_run_binary", "js_run_devserver")
 load("@npm//:defs.bzl", "npm_link_all_packages")
 load("@npm//apps/flow-ui:next/package_json.bzl", next_bin = "bin")
 
@@ -20,6 +22,7 @@ js_library(
         allow_empty = True,
     ),
     deps = [
+        ":node_modules/@fm-flow/ui-components",
         ":node_modules/next",
         ":node_modules/react",
         ":node_modules/react-dom",
@@ -35,6 +38,49 @@ js_library(
     ],
 )
 
+# ---------------------------------------------------------------------------
+# Plain (non-standalone) flow. Uses the CommonJS `next.config.js` so it never
+# collides with the `next.config.mjs` that `nextjs_standalone_build` generates.
+# ---------------------------------------------------------------------------
+
+_CONFIG = [
+    "next.config.js",
+    "jsconfig.json",
+]
+
+js_run_devserver(
+    name = "dev",
+    args = ["dev"],
+    chdir = package_name(),
+    data = [":lib", ":nextjs-css"] + _CONFIG,
+    tool = ":next_js_binary",
+)
+
+js_run_binary(
+    name = "build",
+    srcs = [":lib", ":nextjs-css"] + _CONFIG,
+    args = ["build"],
+    chdir = package_name(),
+    out_dirs = [".next"],
+    tool = ":next_js_binary",
+)
+
+js_run_devserver(
+    name = "start",
+    args = ["start"],
+    chdir = package_name(),
+    data = [":lib", ":nextjs-css", ":build"] + _CONFIG,
+    tool = ":next_js_binary",
+)
+
+# ---------------------------------------------------------------------------
+# Standalone flow. `nextjs_standalone_build` works; its companion
+# `nextjs_standalone_server` is broken in contrib/nextjs 3.2.2 (its
+# copy_to_directory filters on a `.next/` prefix that the build artifact does
+# not have, so only `public/` gets bundled and `server.js` goes missing).
+# We reproduce the server bundle by hand with the correct include patterns.
+# ---------------------------------------------------------------------------
+
 nextjs_standalone_build(
     name = "standalone",
     srcs = [
@@ -46,7 +92,48 @@ nextjs_standalone_build(
     next_js_binary = ":next_js_binary",
 )
 
-nextjs_standalone_server(
+# Assemble the runnable standalone directory. The `:standalone` tree artifact
+# holds the *contents* of `.next`, and copy_to_directory prefixes them with the
+# build target's name, so paths arrive as `standalone/standalone/**` (the
+# `.next/standalone` app) and `standalone/static/**` (client assets). Remap to:
+#   standalone/apps/flow-ui/server.js          (traced server + node_modules)
+#   standalone/apps/flow-ui/.next/static/**    (client assets)
+#   standalone/apps/flow-ui/public/**          (public assets)
+copy_to_directory(
+    name = "server_bundle",
+    srcs = [":standalone"] + glob(
+        ["public/**"],
+        allow_empty = True,
+    ),
+    allow_overwrites = True,
+    include_srcs_patterns = [
+        "standalone/standalone/**",
+        "standalone/static/**",
+        "public/**",
+    ],
+    replace_prefixes = {
+        "standalone/standalone": "standalone",
+        "standalone/static": "standalone/{}/.next/static".format(package_name()),
+        "public": "standalone/{}/public".format(package_name()),
+    },
+)
+
+directory_path(
+    name = "server_entry",
+    directory = ":server_bundle",
+    path = "standalone/{}/server.js".format(package_name()),
+)
+
+js_binary(
     name = "server",
-    app = ":standalone",
+    chdir = package_name(),
+    data = [
+        ":server_bundle",
+        # The standalone wrapper scrubs the traced node_modules symlinks; the
+        # runtime packages must be supplied here (matching what next traces).
+        ":node_modules/next",
+        ":node_modules/react",
+        ":node_modules/react-dom",
+    ],
+    entry_point = ":server_entry",
 )
