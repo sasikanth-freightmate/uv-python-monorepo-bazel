@@ -7,7 +7,7 @@ import { Search, Plus } from '../lib/glyphs.jsx'
 // click-to-add or drag-to-canvas.
 export function PaletteSidebar({ vm }) {
   return (
-    <div className="flex h-full w-[300px] min-h-0 flex-none flex-col border-r border-[#E6E8EC] bg-white">
+    <div className="relative z-10 flex h-full w-[300px] min-h-0 flex-none flex-col border-r border-[#E6E8EC] bg-white">
       <div className="px-[18px] pb-[12px] pt-[18px]">
         <div className="mb-[3px] text-[13px] font-bold tracking-[.02em] text-[#181B22]">Add a step</div>
         <div className="text-[12.5px] leading-[1.4] text-[#8A919C]">{vm.hint}</div>

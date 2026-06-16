@@ -21,7 +21,7 @@ export function EditorScreen({ vm }) {
         onDragOver={c.onCanvasDragOver}
         onDrop={c.onCanvasDrop}
         style={c.viewportStyle}
-        className="relative flex min-w-0 flex-1"
+        className="relative flex min-w-0 flex-1 overflow-hidden"
       >
         <div style={c.canvasStyle}>
           <CanvasEdges edges={c.edges} preview={c.connectPreview} />
