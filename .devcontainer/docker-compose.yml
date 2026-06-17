@@ -6,12 +6,9 @@ services:
     environment:
       - ENV=development
       - USE_BAZEL_VERSION=9.1.0
-      - TEMPORAL_ADDRESS=temporal:7233
       - DATABASE_URL=postgres://freightmate:freightmate@postgres:5432/freightmate
       - REDIS_URL=redis://redis:6379
     depends_on:
-      temporal:
-        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -61,41 +58,6 @@ services:
       retries: 5
       start_period: 10s
 
-  # Temporal server backed by PostgreSQL.
-  # auto-setup creates the temporal and temporal_visibility schemas on first boot.
-  # Web UI is not bundled; run temporalio/ui separately if needed.
-  temporal:
-    image: temporalio/auto-setup:latest
-    environment:
-      - DB=postgres12
-      - DB_PORT=5432
-      - POSTGRES_USER=freightmate
-      - POSTGRES_PWD=freightmate
-      - POSTGRES_SEEDS=postgres
-      - DBNAME=temporal
-      - VISIBILITY_DBNAME=temporal_visibility
-      - BIND_ON_IP=0.0.0.0
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - freightmate
-    healthcheck:
-      test: ["CMD", "tctl", "--address", "127.0.0.1:7233", "cluster", "health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-
-  temporal-ui:
-    image: temporalio/ui:latest
-    environment:
-      - TEMPORAL_ADDRESS=temporal:7233
-    depends_on:
-      temporal:
-        condition: service_healthy
-    networks:
-      - freightmate
 
 volumes:
   bazel_cache:

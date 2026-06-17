@@ -1,0 +1,88 @@
+load("@aspect_rules_py//py:defs.bzl", "py_binary", "py_library", "py_test")
+
+# App-specific composition: roles + config. Reusable plumbing lives in
+# //packages/service. One build; role chosen at launch by `--role` (ADR-0015).
+py_library(
+    name = "flow_backend_lib",
+    srcs = [
+        "__init__.py",
+        "config.py",
+        "containers.py",
+        "roles/__init__.py",
+        "roles/api.py",
+        "roles/gateway.py",
+        "roles/ingestion.py",
+        "roles/reconciler.py",
+        "roles/worker.py",
+        # api layer
+        "api/__init__.py",
+        "api/exception_handlers.py",
+        "api/workflows/__init__.py",
+        "api/workflows/endpoints.py",
+        "api/workflows/schemas.py",
+        # domain layer
+        "domain/__init__.py",
+        "domain/shared/__init__.py",
+        "domain/shared/value_objects.py",
+        "domain/workflows/__init__.py",
+        "domain/workflows/events.py",
+        "domain/workflows/exceptions.py",
+        "domain/workflows/models.py",
+        "domain/workflows/repositories.py",
+        # application layer
+        "application/__init__.py",
+        "application/workflows/__init__.py",
+        "application/workflows/unit_of_work.py",
+        "application/workflows/use_cases.py",
+        # infrastructure layer
+        "infrastructure/__init__.py",
+        "infrastructure/database.py",
+        "infrastructure/outbox/__init__.py",
+        "infrastructure/outbox/models.py",
+        "infrastructure/outbox/repository.py",
+        "infrastructure/outbox/relay.py",
+        "infrastructure/workflows/__init__.py",
+        "infrastructure/workflows/orm.py",
+        "infrastructure/workflows/repositories.py",
+        # containers
+        "containers/__init__.py",
+        "containers/workflows.py",
+    ],
+    imports = ["../.."],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//packages/common",
+        "//packages/service",
+        "@pypi//dependency_injector",
+        "@pypi//fastapi",
+        "@pypi//pydantic",
+        "@pypi//pydantic_settings",
+        "@pypi//sqlalchemy",
+        "@pypi//asyncpg",
+    ],
+)
+
+py_binary(
+    name = "flow_backend",
+    srcs = ["main.py"],
+    main = "main.py",
+    visibility = ["//visibility:public"],
+    deps = [":flow_backend_lib"],
+)
+
+py_test(
+    name = "config_test",
+    srcs = ["config_test.py"],
+    main = "config_test.py",
+    deps = [":flow_backend_lib"],
+)
+
+py_test(
+    name = "roles_test",
+    srcs = ["roles_test.py"],
+    main = "roles_test.py",
+    deps = [
+        ":flow_backend_lib",
+        "@pypi//httpx",
+    ],
+)

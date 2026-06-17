@@ -12,7 +12,8 @@
       "WebFetch(domain:api.anthropic.com)",
       "Read(//tmp/design-bundle/fm-flow/project/app/**)",
       "Bash(git checkout *)",
-      "Bash(pnpm install *)"
+      "Bash(pnpm install *)",
+      "WebFetch(domain:python-dependency-injector.ets-labs.org)"
     ]
   }
 }
