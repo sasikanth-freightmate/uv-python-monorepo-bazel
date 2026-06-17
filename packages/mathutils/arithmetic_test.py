@@ -1,6 +1,6 @@
 import unittest
 
-from libs.mathutils.arithmetic import add, factorial, is_prime
+from packages.mathutils.arithmetic import add, factorial, is_prime
 
 
 class AddTest(unittest.TestCase):

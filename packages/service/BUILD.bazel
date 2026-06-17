@@ -1,0 +1,51 @@
+load("@aspect_rules_py//py:defs.bzl", "py_library", "py_test")
+
+# Reusable service plumbing: env settings base, logging, health app, uvicorn runner.
+py_library(
+    name = "service",
+    srcs = [
+        "__init__.py",
+        "health.py",
+        "logging_setup.py",
+        "runner.py",
+        "settings.py",
+    ],
+    imports = ["../.."],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@pypi//fastapi",
+        "@pypi//pydantic_settings",
+        "@pypi//uvicorn",
+    ],
+)
+
+py_test(
+    name = "settings_test",
+    srcs = ["settings_test.py"],
+    main = "settings_test.py",
+    deps = [":service"],
+)
+
+py_test(
+    name = "logging_test",
+    srcs = ["logging_test.py"],
+    main = "logging_test.py",
+    deps = [":service"],
+)
+
+py_test(
+    name = "health_test",
+    srcs = ["health_test.py"],
+    main = "health_test.py",
+    deps = [
+        ":service",
+        "@pypi//httpx",
+    ],
+)
+
+py_test(
+    name = "runner_test",
+    srcs = ["runner_test.py"],
+    main = "runner_test.py",
+    deps = [":service"],
+)

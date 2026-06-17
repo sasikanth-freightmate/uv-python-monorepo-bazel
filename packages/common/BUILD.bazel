@@ -4,6 +4,7 @@ py_library(
     name = "common",
     srcs = [
         "__init__.py",
+        "exceptions.py",
         "greetings.py",
     ],
     imports = ["../.."],
@@ -14,5 +15,12 @@ py_test(
     name = "greetings_test",
     srcs = ["greetings_test.py"],
     main = "greetings_test.py",
+    deps = [":common"],
+)
+
+py_test(
+    name = "exceptions_test",
+    srcs = ["exceptions_test.py"],
+    main = "exceptions_test.py",
     deps = [":common"],
 )

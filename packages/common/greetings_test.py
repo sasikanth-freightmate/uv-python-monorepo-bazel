@@ -1,6 +1,6 @@
 import unittest
 
-from libs.common.greetings import make_greeting, shout
+from packages.common.greetings import make_greeting, shout
 
 
 class MakeGreetingTest(unittest.TestCase):
