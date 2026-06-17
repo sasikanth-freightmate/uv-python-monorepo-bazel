@@ -8,7 +8,11 @@
   "postCreateCommand": {
     "bazel-check": "bazelisk version",
     "python-check": "python3 --version",
-    "venv": "bazelisk run //:venv"
+    "venv": "bazelisk run //:venv",
+    "tmux": "tmux -V"
+  },
+  "features": {
+    "ghcr.io/duduribeiro/devcontainer-features/tmux:1": {}
   },
   "customizations": {
     "vscode": {
