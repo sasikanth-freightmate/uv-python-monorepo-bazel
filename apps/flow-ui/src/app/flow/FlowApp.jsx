@@ -1,5 +1,5 @@
 'use client'
-import { Component, createRef } from 'react'
+import { Component } from 'react'
 import {
   AppRail, WorkflowTopBar, PageTopBar, Toast,
   DashboardScreen, EditorScreen, RunDetailScreen, HistoryScreen,
@@ -7,7 +7,7 @@ import {
   Icon, Glyph,
   NODE_CATEGORIES, NODE_DEFS, TYPE_LABELS, NODE_W,
   WORKFLOW_STATUS, RUN_STATUS, RUN_STEP_STATUS, VERSION_STATUS, CONNECTION_STATUS, DIFF_STATUS,
-  outPort, inPort, edgePath,
+  toRFNode, toRFEdge, fromRFConnection, layoutLR,
 } from '@fm-flow/ui-components'
 import {
   PALETTE, WORKFLOWS, HISTORY, VERSIONS, INITIAL_NODES, INITIAL_EDGES, SAMPLES,
@@ -32,35 +32,39 @@ export default class FlowApp extends Component {
       paletteQuery: '',
       histFilter: 'all', histQuery: '',
       selectedId: 'n_trigger',
-      pan: { x: 60, y: 30 }, zoom: 0.82,
-      drag: null, panning: null, connect: null,
+      selectedIds: ['n_trigger'], selectedEdgeIds: [],
+      zoom: 0.82,
+      history: { past: [], future: [] },
       tab: 'settings',
       insertEdge: null,
       run: null, runStatus: 'idle',
       runs: [],
       activeRunId: null, selectedStep: 'n_trigger',
-      runPan: { x: 40, y: -70 }, runZoom: 0.74, runPanning: null,
       toast: null,
       nodes: INITIAL_NODES,
       edges: INITIAL_EDGES,
     }
-    this.viewportRef = createRef()
-    this.runViewportRef = createRef()
-    this._onMove = this._onMove.bind(this)
-    this._onUp = this._onUp.bind(this)
+    this._rf = null            // React Flow instance (editor canvas)
+    this._clipboard = null     // copy/paste buffer: { nodes, edges }
+    this._dragSnapshot = null  // pre-drag history snapshot
+    this._cfgEdit = null       // { fieldKey } for config-edit coalescing
+    // RF object caches — stable identity per node/edge keyed by a content
+    // signature. Without this, fresh objects every render make React Flow
+    // re-measure + re-fit endlessly (onMove -> setState -> render -> loop).
+    this._rfNodeCache = {}
+    this._rfEdgeCache = {}
+    this._rfRunNodeCache = {}
+    this._rfRunEdgeCache = {}
+    this._rfVerNodeCache = {}
+    this._rfVerEdgeCache = {}
     this._onKey = this._onKey.bind(this)
   }
 
   componentDidMount() {
-    window.addEventListener('mousemove', this._onMove)
-    window.addEventListener('mouseup', this._onUp)
     window.addEventListener('keydown', this._onKey)
     this.seedRuns()
-    requestAnimationFrame(() => { if (this.state.view === 'editor' && this.viewportRef.current) this.fit() })
   }
   componentWillUnmount() {
-    window.removeEventListener('mousemove', this._onMove)
-    window.removeEventListener('mouseup', this._onUp)
     window.removeEventListener('keydown', this._onKey)
     if (this._timer) clearTimeout(this._timer)
   }
@@ -68,77 +72,193 @@ export default class FlowApp extends Component {
   // ---------- geometry ----------
   nodeById(id) { return this.state.nodes.find((n) => n.id === id) }
   nodeHeight(n) { return n.type === 'condition' ? 120 : 90 }
-  canvasPoint(e, ref, pan, zoom) {
-    const el = ref.current; if (!el) return { x: 0, y: 0 }
-    const r = el.getBoundingClientRect()
-    return { x: (e.clientX - r.left - pan.x) / zoom, y: (e.clientY - r.top - pan.y) / zoom }
+
+  // ---------- RF object memoization (stable identity) ----------
+  // Returns a STABLE array reference (and stable element identities) whenever the
+  // content signatures are unchanged. React Flow's controlled StoreUpdater re-runs
+  // setNodes on every new `nodes`/`edges` array reference; without this, a fresh
+  // array each render makes it re-measure + re-fit forever (infinite update loop).
+  _memoRFNodes(cache, items) {
+    const elems = cache.elems || (cache.elems = new Map())
+    const seen = new Set()
+    let changed = !cache.arr || cache.arr.length !== items.length
+    const out = items.map(({ key, sig, make }, i) => {
+      seen.add(key)
+      const hit = elems.get(key)
+      if (hit && hit.sig === sig) {
+        if (!changed && cache.arr[i] !== hit.rf) changed = true
+        return hit.rf
+      }
+      changed = true
+      const rf = make()
+      elems.set(key, { sig, rf })
+      return rf
+    })
+    for (const k of elems.keys()) if (!seen.has(k)) { elems.delete(k); changed = true }
+    if (!changed) return cache.arr
+    cache.arr = out
+    return out
   }
 
-  // ---------- pointer handlers ----------
-  onCanvasMouseDown(e) {
-    this.setState({ panning: { sx: e.clientX, sy: e.clientY, px: this.state.pan.x, py: this.state.pan.y }, selectedId: null })
-  }
-  onRunPanDown(e) {
-    this.setState({ runPanning: { sx: e.clientX, sy: e.clientY, px: this.state.runPan.x, py: this.state.runPan.y } })
-  }
-  startNodeDrag(e, id) {
-    e.stopPropagation()
-    const n = this.nodeById(id)
-    this.setState({ selectedId: id, drag: { id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, moved: false } })
-  }
-  startConnect(e, fromId, branch) {
-    e.stopPropagation()
-    const n = this.nodeById(fromId)
-    const p = outPort(n, branch)
-    this.setState({ connect: { from: fromId, branch: branch || null, x: p.x, y: p.y, sx: p.x, sy: p.y } })
-  }
-  finishConnect(toId) {
-    const c = this.state.connect; if (!c) return
-    if (c.from === toId) { this.setState({ connect: null }); return }
-    const exists = this.state.edges.some((ed) => ed.from === c.from && ed.to === toId && (ed.branch || null) === (c.branch || null))
-    if (exists) { this.setState({ connect: null }); return }
-    const edges = this.state.edges.concat([{ id: 'e' + Date.now(), from: c.from, to: toId, branch: c.branch || undefined }])
-    this.setState({ edges, connect: null, toast: 'Connected' })
-    this.flashToast()
-  }
-  _onMove(e) {
-    const s = this.state
-    if (s.drag) {
-      const dx = (e.clientX - s.drag.sx) / s.zoom
-      const dy = (e.clientY - s.drag.sy) / s.zoom
-      if (Math.abs(e.clientX - s.drag.sx) + Math.abs(e.clientY - s.drag.sy) > 3) s.drag.moved = true
-      const nodes = s.nodes.map((n) => (n.id === s.drag.id ? { ...n, x: s.drag.ox + dx, y: s.drag.oy + dy } : n))
-      this.setState({ nodes })
-    } else if (s.panning) {
-      this.setState({ pan: { x: s.panning.px + (e.clientX - s.panning.sx), y: s.panning.py + (e.clientY - s.panning.sy) } })
-    } else if (s.runPanning) {
-      this.setState({ runPan: { x: s.runPanning.px + (e.clientX - s.runPanning.sx), y: s.runPanning.py + (e.clientY - s.runPanning.sy) } })
-    } else if (s.connect) {
-      const p = this.canvasPoint(e, this.viewportRef, s.pan, s.zoom)
-      this.setState({ connect: { ...s.connect, x: p.x, y: p.y } })
-    }
-  }
-  _onUp() {
-    if (this.state.connect) this.setState({ connect: null })
-    if (this.state.drag || this.state.panning || this.state.runPanning) this.setState({ drag: null, panning: null, runPanning: null })
+  // ---------- keyboard: undo/redo, copy/paste, escape ----------
+  _isTyping(e) {
+    const t = e.target.tagName
+    return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || e.target.isContentEditable
   }
   _onKey(e) {
-    if ((e.key === 'Delete' || e.key === 'Backspace') && this.state.selectedId && this.state.view === 'editor') {
-      const t = e.target.tagName
-      if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || e.target.isContentEditable) return
-      e.preventDefault(); this.deleteNode(this.state.selectedId)
-    }
-    if (e.key === 'Escape') this.setState({ selectedId: null, connect: null })
-  }
-  onWheel(e) {
-    if (e.ctrlKey || e.metaKey) {
+    if (e.key === 'Escape') { this.setState({ selectedId: null, selectedIds: [], insertEdge: null }); return }
+    if (this.state.view !== 'editor' || this._isTyping(e)) return
+    const mod = e.metaKey || e.ctrlKey
+    if (mod && (e.key === 'z' || e.key === 'Z')) {
       e.preventDefault()
-      const z = Math.min(1.5, Math.max(0.4, this.state.zoom - e.deltaY * 0.0015))
-      this.setState({ zoom: z })
-    } else {
-      this.setState({ pan: { x: this.state.pan.x - e.deltaX, y: this.state.pan.y - e.deltaY } })
+      if (e.shiftKey) this.redo(); else this.undo()
+    } else if (mod && (e.key === 'y' || e.key === 'Y')) {
+      e.preventDefault(); this.redo()
+    } else if (mod && (e.key === 'c' || e.key === 'C')) {
+      this.copySelection()
+    } else if (mod && (e.key === 'v' || e.key === 'V')) {
+      e.preventDefault(); this.pasteClipboard()
     }
   }
+
+  // ---------- undo / redo ----------
+  _snapshot() {
+    return {
+      nodes: this.state.nodes.map((n) => ({ ...n, config: { ...n.config } })),
+      edges: this.state.edges.map((e) => ({ ...e })),
+    }
+  }
+  _pushHistory(before) {
+    this.setState((s) => ({ history: { past: [...s.history.past, before].slice(-50), future: [] } }))
+  }
+  // Wrap a graph mutation so it can be undone. `mutator` performs the setState.
+  _commit(mutator) {
+    this._cfgEdit = null
+    const before = this._snapshot()
+    this._pushHistory(before)
+    mutator()
+  }
+  undo() {
+    this._cfgEdit = null
+    this.setState((s) => {
+      if (!s.history.past.length) return null
+      const prev = s.history.past[s.history.past.length - 1]
+      const cur = { nodes: s.nodes, edges: s.edges }
+      return {
+        nodes: prev.nodes, edges: prev.edges,
+        history: { past: s.history.past.slice(0, -1), future: [cur, ...s.history.future] },
+        selectedId: null, selectedIds: [], insertEdge: null,
+      }
+    })
+  }
+  redo() {
+    this._cfgEdit = null
+    this.setState((s) => {
+      if (!s.history.future.length) return null
+      const next = s.history.future[0]
+      const cur = { nodes: s.nodes, edges: s.edges }
+      return {
+        nodes: next.nodes, edges: next.edges,
+        history: { past: [...s.history.past, cur], future: s.history.future.slice(1) },
+        selectedId: null, selectedIds: [], insertEdge: null,
+      }
+    })
+  }
+
+  // ---------- copy / paste ----------
+  copySelection() {
+    const ids = new Set(this.state.selectedIds && this.state.selectedIds.length ? this.state.selectedIds : (this.state.selectedId ? [this.state.selectedId] : []))
+    if (!ids.size) return
+    const nodes = this.state.nodes.filter((n) => ids.has(n.id)).map((n) => ({ ...n, config: { ...n.config } }))
+    const edges = this.state.edges.filter((e) => ids.has(e.from) && ids.has(e.to)).map((e) => ({ ...e }))
+    this._clipboard = { nodes, edges }
+    this.setState({ toast: nodes.length + ' step' + (nodes.length === 1 ? '' : 's') + ' copied' }); this.flashToast()
+  }
+  pasteClipboard() {
+    const cb = this._clipboard
+    if (!cb || !cb.nodes.length) return
+    this._commit(() => {
+      const taken = new Set(this.state.nodes.map((n) => n.slug).filter(Boolean))
+      const slugFor = (title) => {
+        const base = this.slugify(title)
+        let cand = base, i = 2
+        while (taken.has(cand)) cand = base + '_' + i++
+        taken.add(cand); return cand
+      }
+      const idMap = {}
+      const newNodes = cb.nodes.map((n) => {
+        const id = this.newId(); idMap[n.id] = id
+        return { ...n, id, slug: slugFor(n.title), x: n.x + 40, y: n.y + 40, config: { ...n.config } }
+      })
+      const newEdges = cb.edges.map((e) => ({ id: 'e' + Math.random().toString(36).slice(2, 7), from: idMap[e.from], to: idMap[e.to], branch: e.branch }))
+      const newIds = newNodes.map((n) => n.id)
+      this.setState((s) => ({
+        nodes: s.nodes.concat(newNodes), edges: s.edges.concat(newEdges),
+        selectedIds: newIds, selectedId: newIds.length === 1 ? newIds[0] : null,
+        toast: 'Pasted',
+      }))
+      this.flashToast()
+    })
+  }
+
+  // ---------- auto-layout ----------
+  tidyUp() {
+    this._commit(() => {
+      this.setState((s) => ({ nodes: layoutLR(s.nodes, s.edges) }))
+      requestAnimationFrame(() => { if (this._rf) this._rf.fitView({ padding: 0.2, duration: 300 }) })
+    })
+  }
+
+  // ---------- React Flow handlers (editor canvas) ----------
+  onCanvasInit(inst) { this._rf = inst }
+  onCanvasMove(_, viewport) { if (viewport && Math.abs(viewport.zoom - this.state.zoom) > 0.001) this.setState({ zoom: viewport.zoom }) }
+  onRFConnect(c) {
+    if (!c.source || !c.target) return
+    if (c.source === c.target) return
+    const branch = fromRFConnection(c).branch || null
+    const exists = this.state.edges.some((ed) => ed.from === c.source && ed.to === c.target && (ed.branch || null) === branch)
+    if (exists) return
+    this._commit(() => {
+      const edge = { id: 'e' + Date.now(), from: c.source, to: c.target, branch: branch || undefined }
+      this.setState((s) => ({ edges: s.edges.concat([edge]), toast: 'Connected' }))
+      this.flashToast()
+    })
+  }
+  onRFNodeDragStart() { this._dragSnapshot = this._snapshot() }
+  onRFNodeDragStop(_, __, dragged) {
+    const pos = new Map((dragged || []).map((n) => [n.id, n.position]))
+    const snap = this._dragSnapshot
+    this._dragSnapshot = null
+    this.setState((s) => ({
+      nodes: pos.size ? s.nodes.map((n) => (pos.has(n.id) ? { ...n, x: pos.get(n.id).x, y: pos.get(n.id).y } : n)) : s.nodes,
+      history: snap ? { past: [...s.history.past, snap].slice(-50), future: [] } : s.history,
+    }))
+  }
+  onRFNodesDelete(deleted) { this.deleteNodes(deleted.map((n) => n.id)) }
+  onRFSelectionChange(sel) {
+    const nodeIds = (sel.nodes || []).map((n) => n.id)
+    const edgeIds = (sel.edges || []).map((e) => e.id)
+    // Bail when nothing changed — controlled `selected` flags make RF re-emit
+    // selection on every render, which would otherwise loop setState forever.
+    const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i])
+    if (same(nodeIds, this.state.selectedIds || []) && same(edgeIds, this.state.selectedEdgeIds || [])) return
+    this.setState({ selectedIds: nodeIds, selectedEdgeIds: edgeIds, selectedId: nodeIds.length === 1 ? nodeIds[0] : null })
+  }
+  onRFPaneClick() { this.setState({ selectedId: null, selectedIds: [], insertEdge: null }) }
+  onRFDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }
+  onRFDrop(e) {
+    e.preventDefault()
+    const type = e.dataTransfer.getData('text/type')
+    if (!type) return
+    let pos = { x: 200, y: 260 }
+    if (this._rf && this._rf.screenToFlowPosition) {
+      const p = this._rf.screenToFlowPosition({ x: e.clientX, y: e.clientY })
+      pos = { x: Math.round(p.x - NODE_W / 2), y: Math.round(p.y - 45) }
+    }
+    this.addNodeAt(type, pos)
+  }
+  onEditorZoom(delta) { if (this._rf) { delta > 0 ? this._rf.zoomIn() : this._rf.zoomOut() } }
+  onEditorFit() { if (this._rf) this._rf.fitView({ padding: 0.2, duration: 300 }) }
 
   // ---------- slugs & data references ----------
   slugify(str) { return String(str || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'node' }
@@ -177,78 +297,89 @@ export default class FlowApp extends Component {
 
   // ---------- node ops ----------
   newId() { return 'n' + Math.random().toString(36).slice(2, 8) }
-  addNode(type, atEdge) {
+  _makeNode(type, x, y) {
     const d = NODE_DEFS[type]
-    const id = this.newId()
-    let x = 200, y = 260
-    let edges = this.state.edges.slice()
-    if (atEdge) {
-      const ed = this.state.edges.find((e) => e.id === atEdge)
-      const a = this.nodeById(ed.from), b = this.nodeById(ed.to)
-      x = (a.x + b.x) / 2; y = (a.y + b.y) / 2
-      edges = edges.filter((e) => e.id !== atEdge)
-      edges.push({ id: 'e' + Date.now(), from: ed.from, to: id, branch: ed.branch })
-      edges.push({ id: 'e' + (Date.now() + 1), from: id, to: ed.to })
-    } else {
-      const sel = this.state.selectedId ? this.nodeById(this.state.selectedId) : null
-      if (sel) {
-        x = sel.x + 332; y = sel.y
-        if (sel.type !== 'condition') edges.push({ id: 'e' + Date.now(), from: sel.id, to: id })
-      } else if (this.state.nodes.length) {
-        const last = this.state.nodes[this.state.nodes.length - 1]
-        x = last.x + 332; y = last.y
-      } else { x = 80; y = 250 }
-    }
-    const node = { id, slug: this.makeSlug(d.title), type, title: d.title, sub: d.sub, x, y, configured: (type === 'trigger' || type === 'condition' || type === 'delay' || type === 'filter'), config: {} }
-    this.setState({ nodes: this.state.nodes.concat([node]), edges, selectedId: id, tab: 'settings', insertEdge: null, toast: 'Added “' + d.title + '”' })
-    this.flashToast()
+    return { id: this.newId(), slug: this.makeSlug(d.title), type, title: d.title, sub: d.sub, x, y, configured: (type === 'trigger' || type === 'condition' || type === 'delay' || type === 'filter'), config: {} }
+  }
+  addNode(type, atEdge) {
+    this._commit(() => {
+      const node = this._makeNode(type, 200, 260)
+      let edges = this.state.edges.slice()
+      if (atEdge) {
+        const ed = this.state.edges.find((e) => e.id === atEdge)
+        const a = this.nodeById(ed.from), b = this.nodeById(ed.to)
+        node.x = (a.x + b.x) / 2; node.y = (a.y + b.y) / 2
+        edges = edges.filter((e) => e.id !== atEdge)
+        edges.push({ id: 'e' + Date.now(), from: ed.from, to: node.id, branch: ed.branch })
+        edges.push({ id: 'e' + (Date.now() + 1), from: node.id, to: ed.to })
+      } else {
+        const sel = this.state.selectedId ? this.nodeById(this.state.selectedId) : null
+        if (sel) {
+          node.x = sel.x + 332; node.y = sel.y
+          if (sel.type !== 'condition') edges.push({ id: 'e' + Date.now(), from: sel.id, to: node.id })
+        } else if (this.state.nodes.length) {
+          const last = this.state.nodes[this.state.nodes.length - 1]
+          node.x = last.x + 332; node.y = last.y
+        } else { node.x = 80; node.y = 250 }
+      }
+      this.setState({ nodes: this.state.nodes.concat([node]), edges, selectedId: node.id, selectedIds: [node.id], tab: 'settings', insertEdge: null, toast: 'Added “' + NODE_DEFS[type].title + '”' })
+      this.flashToast()
+    })
+  }
+  // Drop from the palette: place at the drop point, no auto-connect.
+  addNodeAt(type, pos) {
+    this._commit(() => {
+      const node = this._makeNode(type, pos.x, pos.y)
+      this.setState((s) => ({ nodes: s.nodes.concat([node]), selectedId: node.id, selectedIds: [node.id], tab: 'settings', insertEdge: null, toast: 'Added “' + NODE_DEFS[type].title + '”' }))
+      this.flashToast()
+    })
   }
   onPaletteAdd(type) { this.addNode(type, this.state.insertEdge) }
-  deleteNode(id) {
-    const ins = this.state.edges.filter((e) => e.to === id)
-    const outs = this.state.edges.filter((e) => e.from === id)
-    let edges = this.state.edges.filter((e) => e.from !== id && e.to !== id)
-    if (ins.length && outs.length) {
-      ins.forEach((ie) => { outs.forEach((oe) => { edges.push({ id: 'e' + Math.random().toString(36).slice(2, 7), from: ie.from, to: oe.to, branch: ie.branch }) }) })
-    }
-    const nodes = this.state.nodes.filter((n) => n.id !== id)
-    this.setState({ nodes, edges, selectedId: null, toast: 'Step deleted' })
-    this.flashToast()
+  deleteNode(id) { this.deleteNodes([id]) }
+  deleteNodes(ids) {
+    const idSet = new Set(ids)
+    if (!idSet.size) return
+    this._commit(() => {
+      this.setState((s) => {
+        let edges = s.edges.slice()
+        // Bridge each deleted node's surviving in-edges to its surviving out-edges.
+        ids.forEach((id) => {
+          const ins = edges.filter((e) => e.to === id && !idSet.has(e.from))
+          const outs = edges.filter((e) => e.from === id && !idSet.has(e.to))
+          if (ins.length && outs.length) {
+            ins.forEach((ie) => outs.forEach((oe) => { edges.push({ id: 'e' + Math.random().toString(36).slice(2, 7), from: ie.from, to: oe.to, branch: ie.branch }) }))
+          }
+        })
+        edges = edges.filter((e) => !idSet.has(e.from) && !idSet.has(e.to))
+        const nodes = s.nodes.filter((n) => !idSet.has(n.id))
+        return { nodes, edges, selectedId: null, selectedIds: [], toast: ids.length > 1 ? ids.length + ' steps deleted' : 'Step deleted' }
+      })
+      this.flashToast()
+    })
   }
+  // Coalesce rapid edits to one field into a single undo step.
+  _beginCoalesced(fieldKey) {
+    if (!this._cfgEdit || this._cfgEdit.fieldKey !== fieldKey) {
+      this._pushHistory(this._snapshot())
+      this._cfgEdit = { fieldKey }
+    }
+  }
+  endFieldEdit() { this._cfgEdit = null }
   updateConfig(id, key, val) {
-    const nodes = this.state.nodes.map((n) => (n.id === id ? { ...n, config: { ...n.config, [key]: val } } : n))
-    this.setState({ nodes })
+    this._beginCoalesced(id + '::' + key)
+    this.setState((s) => ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, config: { ...n.config, [key]: val } } : n)) }))
   }
   saveConfig(id) {
-    const nodes = this.state.nodes.map((n) => (n.id === id ? { ...n, configured: true, sub: NODE_DEFS[n.type].sub } : n))
-    this.setState({ nodes, toast: 'Step configured' }); this.flashToast()
+    this._commit(() => {
+      this.setState((s) => ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, configured: true, sub: NODE_DEFS[n.type].sub } : n)), toast: 'Step configured' }))
+      this.flashToast()
+    })
   }
   renameNode(id, v) {
-    const nodes = this.state.nodes.map((n) => (n.id === id ? { ...n, title: v } : n))
-    this.setState({ nodes })
+    this._beginCoalesced(id + '::__title')
+    this.setState((s) => ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, title: v } : n)) }))
   }
 
-  // ---------- zoom / fit ----------
-  setZoom(z) { this.setState({ zoom: Math.min(1.5, Math.max(0.4, z)) }) }
-  fit() {
-    const ns = this.state.nodes
-    const vp = this.viewportRef.current
-    if (!ns.length || !vp) { this.setState({ zoom: 0.7, pan: { x: 30, y: 60 } }); return }
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-    ns.forEach((n) => {
-      minX = Math.min(minX, n.x); minY = Math.min(minY, n.y)
-      maxX = Math.max(maxX, n.x + NODE_W); maxY = Math.max(maxY, n.y + this.nodeHeight(n))
-    })
-    const gw = maxX - minX, gh = maxY - minY
-    const r = vp.getBoundingClientRect()
-    const pad = 64
-    // Floor low enough that a wide graph still fits a narrow canvas (e.g. when
-    // the config panel is open) instead of clamping and overflowing the edge.
-    const zoom = Math.min(1.2, Math.max(0.2, Math.min((r.width - pad * 2) / gw, (r.height - pad * 2) / gh)))
-    const panX = (r.width - gw * zoom) / 2 - minX * zoom
-    const panY = (r.height - gh * zoom) / 2 - minY * zoom
-    this.setState({ zoom, pan: { x: panX, y: panY } })
-  }
 
   // ---------- run simulation ----------
   activeRun() { return this.state.runs.find((r) => r.id === this.state.activeRunId) || this.state.runs[0] }
@@ -490,42 +621,21 @@ export default class FlowApp extends Component {
     const s = this.state
     const sel = s.selectedId ? this.nodeById(s.selectedId) : null
 
-    const nodes = s.nodes.map((n) => ({
-      node: n,
-      selected: s.selectedId === n.id,
-      dragging: s.drag && s.drag.id === n.id,
-      runState: liveSteps ? liveSteps[n.id] : null,
-      onCardDown: (e) => this.startNodeDrag(e, n.id),
-      onPortDown: (e) => this.startConnect(e, n.id, null),
-      onPortUp: () => this.finishConnect(n.id),
-      onPortDownTrue: (e) => this.startConnect(e, n.id, 'true'),
-      onPortDownFalse: (e) => this.startConnect(e, n.id, 'false'),
+    const rfNodes = this._memoRFNodes(this._rfNodeCache, s.nodes.map((n) => {
+      const rs = liveSteps ? liveSteps[n.id] : null
+      const sig = [n.x, n.y, n.title, n.sub, n.type, n.configured, n.slug, rs ? rs.st + '|' + (rs.ms || '') : ''].join('~')
+      return { key: n.id, sig, make: () => toRFNode(n, { runState: rs }) }
     }))
 
-    const edgeColor = (br) => (br === 'true' ? '#9FD3B6' : br === 'false' ? '#C7CCD6' : '#C9CFD8')
-    const edges = s.edges.map((ed) => {
-      const a = this.nodeById(ed.from), b = this.nodeById(ed.to)
-      if (!a || !b) return { id: ed.id, d: '', color: 'transparent', width: 0 }
-      const p1 = outPort(a, ed.branch), p2 = inPort(b)
+    const onInsert = (edgeId) => { this.setState({ insertEdge: edgeId, toast: 'Pick a step to insert' }); this.flashToast() }
+    const rfEdges = this._memoRFNodes(this._rfEdgeCache, s.edges.map((ed) => {
       const rs = liveSteps ? liveSteps[ed.from] : null
+      const running = !!(rs && rs.st === 'running')
       const active = rs && (rs.st === 'ok' || rs.st === 'running')
-      return { id: ed.id, d: edgePath(p1.x, p1.y, p2.x, p2.y), color: active ? '#7CC9A1' : edgeColor(ed.branch), width: active ? 2.6 : 2, dash: active && rs.st === 'running' ? '6 6' : '', animated: active && rs.st === 'running' }
-    })
-
-    const edgeButtons = s.edges.map((ed) => {
-      const a = this.nodeById(ed.from), b = this.nodeById(ed.to)
-      if (!a || !b) return null
-      const p1 = outPort(a, ed.branch), p2 = inPort(b)
-      const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2
-      return {
-        id: ed.id,
-        onClick: (e) => { e.stopPropagation(); this.setState({ insertEdge: ed.id, toast: 'Pick a step to insert' }); this.flashToast() },
-        style: { position: 'absolute', left: mx - 11, top: my - 11, width: 22, height: 22, borderRadius: '50%', background: '#fff', border: '1px solid ' + (s.insertEdge === ed.id ? '#0E6EFF' : '#D7DBE2'), color: s.insertEdge === ed.id ? '#0E6EFF' : '#A6ACB6', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 4, boxShadow: '0 1px 3px rgba(20,24,32,.12)' },
-      }
-    }).filter(Boolean)
-
-    let connectPreview = null
-    if (s.connect) connectPreview = edgePath(s.connect.sx, s.connect.sy, s.connect.x, s.connect.y)
+      const insertActive = s.insertEdge === ed.id
+      const sig = [ed.from, ed.to, ed.branch || '', running, active && !running ? 'a' : '', active ? 'w' : '', insertActive].join('~')
+      return { key: ed.id, sig, make: () => toRFEdge(ed, { running, colorOverride: active && !running ? '#7CC9A1' : null, widthOverride: active ? 2.6 : null, onInsert, insertActive }) }
+    }))
 
     // palette
     const q = s.paletteQuery.trim().toLowerCase()
@@ -540,19 +650,25 @@ export default class FlowApp extends Component {
     return {
       palette: { hint: s.insertEdge ? 'Choose a step to insert into the connection.' : 'Click or drag a step onto the canvas.', query: s.paletteQuery, onSearch: (e) => this.setState({ paletteQuery: e.target.value }), groups },
       canvas: {
-        nodes, edges, edgeButtons, connectPreview, showEmpty: s.nodes.length === 0,
-        viewportRef: this.viewportRef,
-        viewportStyle: { backgroundImage: 'radial-gradient(#C7CCD4 1.2px, transparent 1.2px)', backgroundSize: `${24 * s.zoom}px ${24 * s.zoom}px`, backgroundPosition: `${s.pan.x}px ${s.pan.y}px`, cursor: s.panning ? 'grabbing' : 'default' },
-        canvasStyle: { position: 'absolute', top: 0, left: 0, width: 5000, height: 3200, transform: `translate(${s.pan.x}px, ${s.pan.y}px) scale(${s.zoom})`, transformOrigin: '0 0' },
+        showEmpty: s.nodes.length === 0,
         zoomPct: Math.round(s.zoom * 100) + '%',
-        onZoomIn: () => this.setZoom(s.zoom + 0.1), onZoomOut: () => this.setZoom(s.zoom - 0.1), onZoomReset: () => this.setState({ zoom: 0.82 }), onFit: () => this.fit(),
-        onCanvasMouseDown: (e) => { if (e.target === this.viewportRef.current || e.currentTarget === e.target) this.onCanvasMouseDown(e); else this.setState({ selectedId: null, panning: { sx: e.clientX, sy: e.clientY, px: s.pan.x, py: s.pan.y } }) },
-        onWheel: (e) => this.onWheel(e),
-        onCanvasDragOver: (e) => e.preventDefault(),
-        onCanvasDrop: (e) => { e.preventDefault(); const t = e.dataTransfer.getData('text/type'); if (t) this.addNode(t, null) },
+        onZoomIn: () => this.onEditorZoom(1), onZoomOut: () => this.onEditorZoom(-1), onZoomReset: () => this.onEditorFit(), onFit: () => this.onEditorFit(), onTidy: () => this.tidyUp(),
         onAddTrigger: () => this.addNode('trigger', null),
         showRunBanner: s.runStatus === 'success',
         onOpenRun: () => this.openRun(),
+        flow: {
+          nodes: rfNodes, edges: rfEdges,
+          onInit: (inst) => this.onCanvasInit(inst),
+          onMove: (e, vp) => this.onCanvasMove(e, vp),
+          onConnect: (c) => this.onRFConnect(c),
+          onNodeDragStart: (e, n, ns) => this.onRFNodeDragStart(e, n, ns),
+          onNodeDragStop: (e, n, ns) => this.onRFNodeDragStop(e, n, ns),
+          onNodesDelete: (d) => this.onRFNodesDelete(d),
+          onSelectionChange: (sel2) => this.onRFSelectionChange(sel2),
+          onPaneClick: () => this.onRFPaneClick(),
+          onDrop: (e) => this.onRFDrop(e),
+          onDragOver: (e) => this.onRFDragOver(e),
+        },
       },
       config: { sel: sel ? this.configVM(sel) : null, onSaveConfig: () => this.saveConfig(s.selectedId) },
     }
@@ -592,24 +708,25 @@ export default class FlowApp extends Component {
     const ar = this.activeRun()
     const stMap = ar ? ar.steps : {}
 
-    const runNodes = s.nodes.map((n) => {
+    const runNodes = this._memoRFNodes(this._rfRunNodeCache, s.nodes.map((n) => {
       const st = stMap[n.id] || { st: 'skip' }
       let trueTaken = false, falseTaken = false
       if (n.type === 'condition') {
         s.edges.forEach((ed) => { if (ed.from === n.id) { const tst = stMap[ed.to]; const taken = !!(tst && tst.st !== 'skip' && tst.st !== 'pending'); if (ed.branch === 'true') trueTaken = trueTaken || taken; else if (ed.branch === 'false') falseTaken = falseTaken || taken } })
       }
-      return { node: n, runState: st, selected: s.selectedStep === n.id, isCondition: n.type === 'condition', trueTaken, falseTaken, onSelect: (e) => { e.stopPropagation(); this.setState({ selectedStep: n.id }) } }
-    })
+      const selected = s.selectedStep === n.id
+      const sig = [n.x, n.y, n.title, n.sub, n.type, st.st, st.ms || '', selected, trueTaken, falseTaken].join('~')
+      return { key: n.id, sig, make: () => toRFNode(n, { type: 'fmRunNode', decor: { runState: st, selected, isCondition: n.type === 'condition', trueTaken, falseTaken } }) }
+    }))
 
-    const runEdges = s.edges.map((ed) => {
-      const a = this.nodeById(ed.from), b = this.nodeById(ed.to)
-      if (!a || !b) return { id: ed.id, d: '', color: 'transparent', width: 0 }
-      const p1 = outPort(a, ed.branch), p2 = inPort(b)
+    const runEdges = this._memoRFNodes(this._rfRunEdgeCache, s.edges.map((ed) => {
       const fst = stMap[ed.from], tst = stMap[ed.to]
       const both = fst && tst && fst.st !== 'skip' && tst.st !== 'skip' && fst.st !== 'error'
       const errEdge = fst && fst.st === 'error'
-      return { id: ed.id, d: edgePath(p1.x, p1.y, p2.x, p2.y), color: both ? '#7CC9A1' : errEdge ? '#E8C0C1' : '#DDE0E5', width: both ? 2.6 : 2 }
-    })
+      const color = both ? '#7CC9A1' : errEdge ? '#E8C0C1' : '#DDE0E5'
+      const sig = [ed.from, ed.to, ed.branch || '', color, both ? 2.6 : 2].join('~')
+      return { key: ed.id, sig, make: () => toRFEdge(ed, { colorOverride: color, widthOverride: both ? 2.6 : 2 }) }
+    }))
 
     const heroPal = ar.status === 'success' ? { bg: '#E3F6EC', c: '#10905C', label: 'Success' } : ar.status === 'error' ? { bg: '#FBE5E6', c: '#CC3338', label: ar.cancelled ? 'Cancelled' : 'Failed' } : { bg: '#E5F0FF', c: '#0E6EFF', label: 'Running' }
     const hero = {
@@ -624,7 +741,16 @@ export default class FlowApp extends Component {
       return { id: 'Run ' + r.id, active: r.id === s.activeRunId, status: r.status, bg: pal.bg, c: pal.c, tag: r.status === 'success' ? 'Success' : r.status === 'error' ? (r.cancelled ? 'Cancelled' : 'Failed') : 'Running', meta: r.when, dur: r.dur, onClick: () => this.setState({ activeRunId: r.id, selectedStep: 'n_trigger' }) }
     })
 
-    return { runCountLabel: s.runs.length + ' total', runNodes, runEdges, hero, runList, onRerun: () => { this.setState({ view: 'editor' }); setTimeout(() => this.runWorkflow(), 60) }, runViewportRef: this.runViewportRef, onRunPanDown: (e) => this.onRunPanDown(e), runCanvasStyle: { position: 'absolute', top: 0, left: 0, width: 5000, height: 3200, transform: `translate(${s.runPan.x}px, ${s.runPan.y}px) scale(${s.runZoom})`, transformOrigin: '0 0' }, step: this.stepVM(stMap) }
+    return {
+      runCountLabel: s.runs.length + ' total', hero, runList,
+      onRerun: () => { this.setState({ view: 'editor' }); setTimeout(() => this.runWorkflow(), 60) },
+      flow: {
+        readOnly: true, nodes: runNodes, edges: runEdges,
+        fitKey: 'run|' + s.activeRunId,
+        onNodeClick: (e, node) => this.setState({ selectedStep: node.id }),
+      },
+      step: this.stepVM(stMap),
+    }
   }
 
   stepVM(stMap) {
@@ -688,35 +814,38 @@ export default class FlowApp extends Component {
     // canvas nodes/edges depend on tab
     let verNodes = [], verEdges = [], rawNodes = [], bannerText = '', bannerSub = '', bannerTone = 'neutral'
     let changes = [], hasChanges = false, cmpAName = '', cmpBName = ''
-    const edgeVM = (lookup, from, to, branch, ds) => {
+    const verNodeDesc = (n, diff) => ({ key: n.id, sig: [n.x, n.y, n.title, n.summary, n.type, diff].join('~'), make: () => toRFNode(n, { type: 'fmVerNode', decor: { diff } }) })
+    const edgeDesc = (lookup, from, to, branch, ds) => {
       const a = lookup[from], b = lookup[to]; if (!a || !b) return null
-      const pa = { x: a.x + NODE_W, y: a.y + 37 }, pb = { x: b.x, y: b.y + 37 }
-      return { id: from + '>' + to + '>' + (branch || ''), d: edgePath(pa.x, pa.y, pb.x, pb.y), color: DIFF_STATUS[ds || 'view'].edge, width: ds === 'added' ? 2.6 : 2, dash: ds === 'removed' ? '5 6' : '' }
+      const pal = DIFF_STATUS[ds || 'view']
+      const id = from + '>' + to + '>' + (branch || '')
+      return { key: id, sig: [ds || 'view'].join('~'), make: () => toRFEdge({ id, from, to, branch }, { colorOverride: pal.edge, widthOverride: ds === 'added' ? 2.6 : 2, dash: ds === 'removed' ? '5 6' : null }) }
     }
+    let nodeDescs = [], edgeDescs = []
     if (s.verTab === 'compare') {
       const d = this.diffVersions(s.cmpA, s.cmpB)
       cmpAName = d.a.label + ' · ' + d.a.name; cmpBName = d.b.label + ' · ' + d.b.name
       const lookup = {}; d.b.nodes.forEach((n) => (lookup[n.id] = n)); d.a.nodes.forEach((n) => { if (!lookup[n.id]) lookup[n.id] = n })
       rawNodes = Object.keys(lookup).map((k) => lookup[k])
-      verNodes = rawNodes.map((n) => ({ node: n, diff: d.status[n.id] || 'same' }))
+      nodeDescs = rawNodes.map((n) => verNodeDesc(n, d.status[n.id] || 'same'))
       const ekey = {}
       d.a.edges.forEach((e) => { ekey[e.from + '>' + e.to + '>' + (e.branch || '')] = { from: e.from, to: e.to, branch: e.branch, inA: true, inB: false } })
       d.b.edges.forEach((e) => { const k = e.from + '>' + e.to + '>' + (e.branch || ''); if (ekey[k]) ekey[k].inB = true; else ekey[k] = { from: e.from, to: e.to, branch: e.branch, inA: false, inB: true } })
-      verEdges = Object.keys(ekey).map((k) => { const e = ekey[k]; const ds = e.inA && e.inB ? 'same' : e.inB ? 'added' : 'removed'; return edgeVM(lookup, e.from, e.to, e.branch, ds) }).filter(Boolean)
+      edgeDescs = Object.keys(ekey).map((k) => { const e = ekey[k]; const ds = e.inA && e.inB ? 'same' : e.inB ? 'added' : 'removed'; return edgeDesc(lookup, e.from, e.to, e.branch, ds) }).filter(Boolean)
       changes = d.changes.map((c) => ({ kind: c.kind, title: c.title, detail: c.detail }))
       hasChanges = changes.length > 0
       bannerText = 'Comparing ' + d.a.label + ' → ' + d.b.label; bannerSub = changes.length + ' change' + (changes.length === 1 ? '' : 's'); bannerTone = 'compare'
     } else {
       const lookup = {}; verSel.nodes.forEach((n) => (lookup[n.id] = n))
       rawNodes = verSel.nodes
-      verNodes = verSel.nodes.map((n) => ({ node: n, diff: 'view' }))
-      verEdges = verSel.edges.map((e) => edgeVM(lookup, e.from, e.to, e.branch, 'view')).filter(Boolean)
+      nodeDescs = verSel.nodes.map((n) => verNodeDesc(n, 'view'))
+      edgeDescs = verSel.edges.map((e) => edgeDesc(lookup, e.from, e.to, e.branch, 'view')).filter(Boolean)
       bannerText = verSel.label + ' · ' + verSel.name
       bannerSub = verSel.status === 'live' ? 'Live version · read-only' : verSel.status === 'canary' ? 'Canary draft · read-only' : 'Archived version · read-only'
       bannerTone = verSel.status
     }
-    let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9
-    rawNodes.forEach((n) => { minX = Math.min(minX, n.x); minY = Math.min(minY, n.y); maxX = Math.max(maxX, n.x + NODE_W); maxY = Math.max(maxY, n.y + 82) })
+    verNodes = this._memoRFNodes(this._rfVerNodeCache, nodeDescs)
+    verEdges = this._memoRFNodes(this._rfVerEdgeCache, edgeDescs)
 
     const cs = s.canaryState
     const headPal = cs === 'running' ? { c: '#0E6EFF', bg: '#EAF2FF', label: 'Running' } : cs === 'promoted' ? { c: '#10905C', bg: '#E3F6EC', label: 'Promoted' } : { c: '#B07A00', bg: '#FCF1DD', label: 'Rolled back' }
@@ -738,7 +867,7 @@ export default class FlowApp extends Component {
       verList, selectedRestorable: verSel.status !== 'live', onRestoreSelected: () => this.restoreVersion(s.verSelected),
       cmpA: s.cmpA, cmpB: s.cmpB, cmpOptions: VERSIONS.map((v) => ({ label: v.label, value: v.label })),
       onCmpA: (e) => this.setState({ cmpA: e.target.value }), onCmpB: (e) => this.setState({ cmpB: e.target.value }),
-      verNodes, verEdges, bounds: { minX, minY, maxX, maxY }, fitKey: s.verTab + '|' + s.verSelected + '|' + s.cmpA + '|' + s.cmpB,
+      flow: { readOnly: true, nodes: verNodes, edges: verEdges, fitKey: s.verTab + '|' + s.verSelected + '|' + s.cmpA + '|' + s.cmpB },
       bannerText, bannerSub, bannerTone, changes, hasChanges, cmpAName, cmpBName, canary,
     }
   }

@@ -1,62 +1,23 @@
 'use client'
 import { PaletteSidebar } from '../PaletteSidebar.jsx'
 import { ConfigPanel } from '../ConfigPanel.jsx'
-import { NodeCard } from '../NodeCard.jsx'
-import { CanvasEdges } from '../CanvasEdges.jsx'
+import { FlowCanvas } from '../rf/FlowCanvas.jsx'
 import { Button } from '../../ui/button.jsx'
 import { Plus, Minus, Fit, Check } from '../../lib/glyphs.jsx'
 
-// Workflow editor (spec §3) — the canvas. Palette rail, pannable/zoomable dot
-// grid with nodes + edges, zoom controls, and the slide-in config panel.
+// Workflow editor (spec §3) — the canvas. Palette rail, a React Flow canvas
+// with nodes + edges + pan/zoom, zoom controls, and the slide-in config panel.
 export function EditorScreen({ vm }) {
   const c = vm.canvas
   return (
     <div className="absolute inset-0 flex min-h-0 min-w-0">
       <PaletteSidebar vm={vm.palette} />
 
-      <div
-        ref={c.viewportRef}
-        onMouseDown={c.onCanvasMouseDown}
-        onWheel={c.onWheel}
-        onDragOver={c.onCanvasDragOver}
-        onDrop={c.onCanvasDrop}
-        style={c.viewportStyle}
-        className="relative flex min-w-0 flex-1 overflow-hidden"
-      >
-        <div style={c.canvasStyle}>
-          <CanvasEdges edges={c.edges} preview={c.connectPreview} />
-
-          {c.edgeButtons.map((b) => (
-            <div
-              key={b.id}
-              onClick={b.onClick}
-              title="Insert step"
-              style={b.style}
-              className="transition-colors hover:!border-[#0E6EFF] hover:!bg-[#0E6EFF] hover:!text-white"
-            >
-              <Plus size={13} />
-            </div>
-          ))}
-
-          {c.nodes.map((n) => (
-            <NodeCard
-              key={n.node.id}
-              node={n.node}
-              selected={n.selected}
-              dragging={n.dragging}
-              runState={n.runState}
-              ports
-              onCardDown={n.onCardDown}
-              onPortDown={n.onPortDown}
-              onPortUp={n.onPortUp}
-              onPortDownTrue={n.onPortDownTrue}
-              onPortDownFalse={n.onPortDownFalse}
-            />
-          ))}
-        </div>
+      <div className="relative flex min-w-0 flex-1 overflow-hidden">
+        <FlowCanvas vm={c.flow} />
 
         {c.showEmpty && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
             <div className="pointer-events-auto text-center" style={{ animation: 'fmrise .4s ease both' }}>
               <div className="mx-auto mb-[18px] flex h-[62px] w-[62px] items-center justify-center rounded-[16px] border border-[#E6E8EC] bg-white shadow-[0_8px_24px_-14px_rgba(20,24,32,.25)]">
                 <Plus size={26} style={{ color: '#0E6EFF' }} />
@@ -73,17 +34,14 @@ export function EditorScreen({ vm }) {
           </div>
         )}
 
-        {/* zoom controls — stop mousedown bubbling so clicking them doesn't
-            pan the canvas or deselect the open node / close the config panel */}
-        <div
-          onMouseDown={(e) => e.stopPropagation()}
-          className="absolute bottom-[18px] left-[18px] flex items-center gap-[6px] rounded-[11px] border border-[#E6E8EC] bg-white p-[5px] shadow-[0_4px_14px_-8px_rgba(20,24,32,.22)]"
-        >
+        {/* zoom + layout controls */}
+        <div className="absolute bottom-[18px] left-[18px] z-10 flex items-center gap-[6px] rounded-[11px] border border-[#E6E8EC] bg-white p-[5px] shadow-[0_4px_14px_-8px_rgba(20,24,32,.22)]">
           <button onClick={c.onZoomOut} className="flex h-[30px] w-[30px] items-center justify-center rounded-[7px] text-[#5C6470] hover:bg-[#F4F5F7]"><Minus size={16} /></button>
           <div onClick={c.onZoomReset} className="min-w-[42px] cursor-pointer text-center font-mono text-[12.5px] font-semibold tabular-nums text-[#5C6470]">{c.zoomPct}</div>
           <button onClick={c.onZoomIn} className="flex h-[30px] w-[30px] items-center justify-center rounded-[7px] text-[#5C6470] hover:bg-[#F4F5F7]"><Plus size={16} /></button>
           <div className="mx-[1px] h-[18px] w-px bg-[#E6E8EC]" />
           <button onClick={c.onFit} title="Fit to view" className="flex h-[30px] w-[30px] items-center justify-center rounded-[7px] text-[#5C6470] hover:bg-[#F4F5F7]"><Fit size={15} /></button>
+          <button onClick={c.onTidy} title="Tidy up (auto-layout)" className="flex h-[30px] items-center gap-[6px] rounded-[7px] px-[9px] text-[12.5px] font-semibold text-[#5C6470] hover:bg-[#F4F5F7]"><TidyGlyph />Tidy</button>
         </div>
 
         {c.showRunBanner && (
@@ -105,5 +63,14 @@ export function EditorScreen({ vm }) {
 
       {vm.config.sel && <ConfigPanel vm={vm.config} />}
     </div>
+  )
+}
+
+function TidyGlyph() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="7" height="6" rx="1" /><rect x="14" y="4" width="7" height="6" rx="1" />
+      <rect x="3" y="14" width="7" height="6" rx="1" /><rect x="14" y="14" width="7" height="6" rx="1" />
+    </svg>
   )
 }

@@ -10,7 +10,9 @@
       "Bash(bazel test *)",
       "Bash(devpod stop *)",
       "WebFetch(domain:api.anthropic.com)",
-      "Read(//tmp/design-bundle/fm-flow/project/app/**)"
+      "Read(//tmp/design-bundle/fm-flow/project/app/**)",
+      "Bash(git checkout *)",
+      "Bash(pnpm install *)"
     ]
   }
 }

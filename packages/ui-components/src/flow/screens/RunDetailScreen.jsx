@@ -2,11 +2,9 @@
 import { IconChip } from '../../ui/card.jsx'
 import { Badge } from '../../ui/badge.jsx'
 import { Button } from '../../ui/button.jsx'
-import { Icon } from '../../lib/icons.jsx'
-import { CanvasEdges } from '../CanvasEdges.jsx'
+import { FlowCanvas } from '../rf/FlowCanvas.jsx'
 import { RunInspector } from '../RunInspector.jsx'
-import { Spinner, Check, X, Minus, Stop, Restore } from '../../lib/glyphs.jsx'
-import { NODE_W, RUN_STEP_STATUS, NODE_CATEGORIES, NODE_DEFS } from '../../lib/tokens.js'
+import { Spinner, Check, X, Stop, Restore } from '../../lib/glyphs.jsx'
 
 // Run detail / execution trace (spec §8). The same canvas, read-only, overlaid
 // with per-node execution state; an executions list and the run inspector.
@@ -67,17 +65,8 @@ export function RunDetailScreen({ vm }) {
           <Button variant="outline" onClick={vm.onRerun}><Restore size={15} />Re-run</Button>
         </div>
 
-        <div
-          ref={vm.runViewportRef}
-          onMouseDown={vm.onRunPanDown}
-          className="relative min-h-0 flex-1 cursor-grab overflow-hidden bg-[#F4F5F7]"
-        >
-          <div style={vm.runCanvasStyle}>
-            <CanvasEdges edges={vm.runEdges} />
-            {vm.runNodes.map((rn) => (
-              <RunNode key={rn.node.id} rn={rn} />
-            ))}
-          </div>
+        <div className="relative min-h-0 flex-1 overflow-hidden bg-[#F4F5F7]">
+          <FlowCanvas vm={vm.flow} />
         </div>
       </div>
 
@@ -103,64 +92,4 @@ function RunGlyph({ status, color, size = 15, cancelled }) {
       : <X size={size} style={{ color }} />
   }
   return <Check size={size} style={{ color }} />
-}
-
-// Execution node: base card + status badge, condition branch-taken rows, footer.
-function RunNode({ rn }) {
-  const { node, runState: st, selected } = rn
-  const def = NODE_DEFS[node.type]
-  const cat = NODE_CATEGORIES[def.cat]
-  const pal = RUN_STEP_STATUS[st.st] || RUN_STEP_STATUS.skip
-  const skipped = st.st === 'skip'
-  const badge = st.st === 'ok' ? <Check size={14} style={{ color: pal.badgeC }} />
-    : st.st === 'error' ? <X size={14} style={{ color: pal.badgeC }} />
-      : st.st === 'running' ? <Spinner size={13} style={{ color: pal.badgeC }} />
-        : <Minus size={13} style={{ color: pal.badgeC }} />
-
-  return (
-    <div
-      onMouseDown={rn.onSelect}
-      style={{
-        position: 'absolute', left: node.x, top: node.y, width: NODE_W, background: '#fff',
-        border: '1px solid ' + (selected ? '#0E6EFF' : pal.bd), borderRadius: 14,
-        boxShadow: selected ? '0 0 0 3px rgba(14,110,255,.16)' : '0 2px 5px -3px rgba(20,24,32,.16)',
-        cursor: 'pointer', opacity: skipped ? 0.62 : 1, userSelect: 'none',
-      }}
-    >
-      <div className="flex items-start gap-[11px] px-[13px] pb-[12px] pt-[13px]">
-        <div className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px]" style={{ background: skipped ? '#F1F2F4' : cat.bg, filter: skipped ? 'grayscale(1)' : 'none' }}>
-          <Icon kind={def.kind} color={skipped ? '#A0A6B0' : cat.c} size={18} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[14.5px] font-semibold leading-[1.25] text-[#1B2029]">{node.title}</div>
-          <div className="mt-[2px] text-[12px] leading-[1.3] text-[#98A0AB]">{node.sub}</div>
-        </div>
-        <div className="mt-[1px] flex h-[22px] w-[22px] flex-none items-center justify-center rounded-[7px]" style={{ background: pal.badgeBg }}>{badge}</div>
-      </div>
-
-      {rn.isCondition && (
-        <div className="border-t border-[#EEF0F3]">
-          <BranchRow label="True" taken={rn.trueTaken && !skipped} />
-          <BranchRow label="False" taken={rn.falseTaken && !skipped} border />
-        </div>
-      )}
-
-      <div className="flex items-center gap-[7px] rounded-b-[13px] border-t px-[13px] py-[7px] text-[11.5px] font-semibold" style={{ color: pal.ft, background: pal.ftBg, borderColor: pal.ftBorder }}>
-        <span>{pal.label}</span>
-        <span className="flex-1" />
-        <span className="font-mono font-semibold">{st.ms != null ? st.ms + ' ms' : '—'}</span>
-      </div>
-    </div>
-  )
-}
-
-function BranchRow({ label, taken, border }) {
-  return (
-    <div className="flex h-[30px] items-center gap-[8px] px-[13px]" style={{ background: taken ? '#F2F7FF' : 'transparent', borderTop: border ? '1px solid #F3F4F6' : 'none' }}>
-      <span className="h-[7px] w-[7px] flex-none rounded-full" style={{ background: taken ? '#0E6EFF' : '#D7DBE2' }} />
-      <span className="text-[12px] font-bold" style={{ color: taken ? '#1B2029' : '#A6ACB6' }}>{label}</span>
-      <span className="flex-1" />
-      {taken && <span className="rounded-[5px] bg-[#E5F0FF] px-[7px] py-[1px] text-[10.5px] font-bold text-[#0E6EFF]">taken</span>}
-    </div>
-  )
 }

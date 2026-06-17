@@ -1,12 +1,9 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
 import { Badge } from '../../ui/badge.jsx'
 import { Button } from '../../ui/button.jsx'
 import { Select } from '../../ui/select.jsx'
-import { Icon } from '../../lib/icons.jsx'
-import { CanvasEdges } from '../CanvasEdges.jsx'
-import { ArrowRight, Restore, Check, Spinner } from '../../lib/glyphs.jsx'
-import { NODE_W, NODE_CATEGORIES, NODE_DEFS, DIFF_STATUS } from '../../lib/tokens.js'
+import { FlowCanvas } from '../rf/FlowCanvas.jsx'
+import { ArrowRight, Restore, Check } from '../../lib/glyphs.jsx'
 
 // Versions (timeline + visual diff + canary). The canvas reuses the editor's
 // node geometry; pan/zoom/fit is managed locally so it stays read-only.
@@ -96,56 +93,12 @@ function TimelineRail({ vm }) {
 }
 
 function VersionCanvas({ vm }) {
-  const vpRef = useRef(null)
-  const [view, setView] = useState({ zoom: 0.52, pan: { x: 17, y: 46 } })
-  const panning = useRef(null)
-
-  const fit = () => {
-    const vp = vpRef.current
-    const b = vm.bounds
-    if (!vp || !b) return
-    const r = vp.getBoundingClientRect()
-    if (!r.width) return
-    const gw = Math.max(1, b.maxX - b.minX), gh = Math.max(1, b.maxY - b.minY)
-    const pad = 64
-    const zoom = Math.min(0.92, Math.max(0.4, Math.min((r.width - pad * 2) / gw, (r.height - pad * 2) / gh)))
-    const panX = (r.width - gw * zoom) / 2 - b.minX * zoom
-    const panY = (r.height - gh * zoom) / 2 - b.minY * zoom
-    setView({ zoom, pan: { x: panX, y: panY } })
-  }
-
-  // Re-fit when the displayed version / comparison changes or on resize.
-  useEffect(() => { const id = setTimeout(fit, 20); return () => clearTimeout(id) }, [vm.fitKey])
-  useEffect(() => {
-    const onMove = (e) => {
-      const p = panning.current
-      if (p) setView((s) => ({ ...s, pan: { x: p.px + (e.clientX - p.sx), y: p.py + (e.clientY - p.sy) } }))
-    }
-    const onUp = () => { panning.current = null }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    let ro
-    if (window.ResizeObserver && vpRef.current) { ro = new ResizeObserver(() => fit()); ro.observe(vpRef.current) }
-    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); if (ro) ro.disconnect() }
-  }, [])
-
   return (
     <div className="relative flex min-w-0 flex-1">
-      <div
-        ref={vpRef}
-        onMouseDown={(e) => { panning.current = { sx: e.clientX, sy: e.clientY, px: view.pan.x, py: view.pan.y } }}
-        className="relative flex-1 overflow-hidden"
-        style={{
-          cursor: 'grab', backgroundColor: '#F4F5F7',
-          backgroundImage: 'radial-gradient(#C7CCD4 1.2px, transparent 1.2px)', backgroundSize: '22px 22px',
-        }}
-      >
-        <div style={{ position: 'absolute', top: 0, left: 0, width: 5000, height: 3200, transform: `translate(${view.pan.x}px, ${view.pan.y}px) scale(${view.zoom})`, transformOrigin: '0 0' }}>
-          <CanvasEdges edges={vm.verEdges} />
-          {vm.verNodes.map((vn) => <VerNode key={vn.node.id} vn={vn} />)}
-        </div>
+      <div className="relative flex-1 overflow-hidden bg-[#F4F5F7]">
+        <FlowCanvas vm={vm.flow} />
 
-        <div className="absolute left-[18px] top-[18px]">
+        <div className="absolute left-[18px] top-[18px] z-10">
           <div className="flex items-center gap-[11px] rounded-[11px] border border-[#E6E8EC] bg-white px-[14px] py-[9px] shadow-[0_4px_14px_-8px_rgba(20,24,32,.2)]">
             <span className="h-[8px] w-[8px] flex-none rounded-full" style={{ background: bannerDot(vm.bannerTone) }} />
             <div>
@@ -163,42 +116,6 @@ function VersionCanvas({ vm }) {
 
 function bannerDot(tone) {
   return tone === 'live' ? '#22C277' : tone === 'canary' ? '#0E6EFF' : tone === 'compare' ? '#6E7BF2' : '#C6CBD3'
-}
-
-function VerNode({ vn }) {
-  const { node, diff } = vn
-  const def = NODE_DEFS[node.type]
-  const cat = NODE_CATEGORIES[def.cat]
-  const pal = DIFF_STATUS[diff || 'view']
-  const removed = diff === 'removed'
-  return (
-    <div
-      style={{
-        position: 'absolute', left: node.x, top: node.y, width: NODE_W, background: pal.bg,
-        border: (removed ? '1.5px dashed ' : '1px solid ') + pal.bd, borderRadius: 14,
-        boxShadow: removed ? 'none' : '0 2px 5px -3px rgba(20,24,32,.18), 0 8px 22px -16px rgba(20,24,32,.2)',
-        opacity: removed ? 0.66 : 1, userSelect: 'none',
-      }}
-    >
-      {pal.rc && (
-        <span
-          className="absolute right-[12px] top-[-10px] whitespace-nowrap rounded-[7px] px-[8px] py-[2px] text-[10.5px] font-bold tracking-[.02em]"
-          style={{ color: pal.rc, background: pal.rbg, border: '1px solid ' + pal.bd }}
-        >
-          {pal.tag}
-        </span>
-      )}
-      <div className="flex items-start gap-[11px] px-[14px] py-[13px]">
-        <div className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px]" style={{ background: removed ? '#F1F2F4' : cat.bg, filter: removed ? 'grayscale(1)' : 'none' }}>
-          <Icon kind={def.kind} color={removed ? '#A0A6B0' : cat.c} size={18} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="overflow-hidden text-ellipsis whitespace-nowrap text-[14.5px] font-semibold leading-[1.25] text-[#1B2029]">{node.title}</div>
-          <div className="mt-[2px] overflow-hidden text-ellipsis whitespace-nowrap text-[12px] leading-[1.3] text-[#98A0AB]">{node.summary}</div>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 function ChangePanel({ vm }) {

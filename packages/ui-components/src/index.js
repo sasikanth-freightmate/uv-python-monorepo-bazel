@@ -17,8 +17,12 @@ export { Textarea } from './ui/textarea.jsx'
 export { Card, IconChip } from './ui/card.jsx'
 
 // canvas vocabulary + shell
-export { NodeCard } from './flow/NodeCard.jsx'
-export { CanvasEdges } from './flow/CanvasEdges.jsx'
+export { NodeBody, RunNodeBody, VerNodeBody } from './flow/NodeBody.jsx'
+
+// react flow canvas
+export { FlowCanvas } from './flow/rf/FlowCanvas.jsx'
+export { toRFNode, toRFEdge, fromRFConnection } from './flow/rf/adapters.js'
+export { layoutLR } from './flow/rf/layout.js'
 export { AppRail } from './flow/AppRail.jsx'
 export { WorkflowTopBar } from './flow/WorkflowTopBar.jsx'
 export { PageTopBar } from './flow/PageTopBar.jsx'
