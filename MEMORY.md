@@ -24,7 +24,7 @@ Bazel + bzlmod Python monorepo using `aspect_rules_py` for Python rules and `rul
 │       ├── main.py
 │       └── main_test.py
 │
-└── libs/                     # reusable libraries (py_library, visibility=public)
+└── packages/                     # first-party shared code: py_library libs + JS pkgs (e.g. ui-components, workflow_engine)
     ├── common/               #   greeting helpers
     │   ├── BUILD.bazel       #   common (py_library) + greetings_test (py_test)
     │   ├── __init__.py
@@ -39,12 +39,12 @@ Bazel + bzlmod Python monorepo using `aspect_rules_py` for Python rules and `rul
 
 ## Conventions
 
-- **Package layout**: every directory containing Python sources has a `BUILD.bazel`. Shared code goes under `libs/<name>/`, runnable entrypoints under `apps/<name>/`.
-- **Imports**: each `py_library` / `py_binary` uses `imports = ["../.."]` so source files can `from libs.common.greetings import …` and `from apps.hello.main import …` using fully qualified paths rooted at the workspace.
+- **Package layout**: every directory containing Python sources has a `BUILD.bazel`. Shared code goes under `packages/<name>/`, runnable entrypoints under `apps/<name>/`.
+- **Imports**: each `py_library` / `py_binary` uses `imports = ["../.."]` so source files can `from packages.common.greetings import …` and `from apps.hello.main import …` using fully qualified paths rooted at the workspace.
 - **Tests**: every package owns its tests as `<module>_test.py` next to the source, wired up via `py_test` in the same `BUILD.bazel`.
 - **Binary + test pattern** (used by both apps): split logic into `<name>_lib` (`py_library`) so the binary and the test target both depend on it — avoids duplicating `srcs` and lets tests import the entrypoint module.
 - **PyPI deps**: declared in `requirements.in`, locked via `bazel run //:generate_requirements_txt`, consumed in `BUILD.bazel` files as `@pypi//<package>` (e.g., `@pypi//cowsay`).
-- **Visibility**: libraries under `libs/` are `//visibility:public`. App-internal `*_lib` targets stay package-default.
+- **Visibility**: libraries under `packages/` are `//visibility:public`. App-internal `*_lib` targets stay package-default.
 
 ## Dependency versions (as of 2026-05-11)
 
@@ -87,7 +87,7 @@ bazel run //:venv                          # materialize .venv/ for IDE / Pylanc
 
 ## IDE / Pylance setup
 
-`bazel run //:venv` materializes a real virtualenv at `./.venv/` populated from the `@pypi` hub. VS Code is preconfigured ([.vscode/settings.json](.vscode/settings.json)) to use `./.venv/bin/python` as the interpreter, so Pylance resolves PyPI imports (`cowsay`, `rich`, …) and workspace imports (`from libs.common.greetings import …`) without violating the Bazel-only policy. The venv is IDE-only — `bazel build/test/run` continue to use the hermetic toolchain.
+`bazel run //:venv` materializes a real virtualenv at `./.venv/` populated from the `@pypi` hub. VS Code is preconfigured ([.vscode/settings.json](.vscode/settings.json)) to use `./.venv/bin/python` as the interpreter, so Pylance resolves PyPI imports (`cowsay`, `rich`, …) and workspace imports (`from packages.common.greetings import …`) without violating the Bazel-only policy. The venv is IDE-only — `bazel build/test/run` continue to use the hermetic toolchain.
 
 **Re-run `bazel run //:venv` whenever any of these change, then reload the VS Code window:**
 
@@ -106,6 +106,6 @@ Symptom of a stale venv: `from rich.console import Console` (or any pip dep) fai
 
 ## Adding a new shared library
 
-1. Create `libs/<name>/{BUILD.bazel, __init__.py, <module>.py, <module>_test.py}`.
+1. Create `packages/<name>/{BUILD.bazel, __init__.py, <module>.py, <module>_test.py}`.
 2. Declare `py_library(name = "<name>", visibility = ["//visibility:public"], imports = ["../.."])`.
-3. Consume from apps via `deps = ["//libs/<name>"]`.
+3. Consume from apps via `deps = ["//packages/<name>"]`.
