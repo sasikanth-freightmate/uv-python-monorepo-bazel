@@ -8,3 +8,5 @@ dependency-injector
 sqlalchemy[asyncio]
 asyncpg
 alembic
+testcontainers[postgres]
+psycopg2-binary

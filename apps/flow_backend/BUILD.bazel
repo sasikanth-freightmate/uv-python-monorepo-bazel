@@ -46,6 +46,12 @@ py_library(
         # containers
         "containers/__init__.py",
         "containers/workflows.py",
+        # migrations
+        "migrations/__init__.py",
+        "migrations/env.py",
+        "migrations/versions/__init__.py",
+        "migrations/versions/0001_initial_schema.py",
+        "migrations/versions/0002_full_schema.py",
     ],
     imports = ["../.."],
     visibility = ["//visibility:public"],
@@ -58,6 +64,7 @@ py_library(
         "@pypi//pydantic_settings",
         "@pypi//sqlalchemy",
         "@pypi//asyncpg",
+        "@pypi//alembic",
     ],
 )
 
@@ -70,18 +77,54 @@ py_binary(
 )
 
 py_test(
+    name = "models_test",
+    srcs = ["tests/unit/domain/workflows/test_models.py"],
+    main = "tests/unit/domain/workflows/test_models.py",
+    tags = ["unit"],
+    deps = [":flow_backend_lib"],
+)
+
+py_test(
+    name = "use_cases_test",
+    srcs = ["tests/unit/application/workflows/test_use_cases.py"],
+    main = "tests/unit/application/workflows/test_use_cases.py",
+    tags = ["unit"],
+    deps = [":flow_backend_lib"],
+)
+
+py_test(
     name = "config_test",
-    srcs = ["config_test.py"],
-    main = "config_test.py",
+    srcs = ["tests/unit/test_config.py"],
+    main = "tests/unit/test_config.py",
+    tags = ["unit"],
     deps = [":flow_backend_lib"],
 )
 
 py_test(
     name = "roles_test",
-    srcs = ["roles_test.py"],
-    main = "roles_test.py",
+    srcs = ["tests/integration/test_roles.py"],
+    main = "tests/integration/test_roles.py",
+    tags = ["integration"],
     deps = [
         ":flow_backend_lib",
         "@pypi//httpx",
+    ],
+)
+
+py_test(
+    name = "migrations_test",
+    srcs = ["tests/integration/test_migrations.py"],
+    main = "tests/integration/test_migrations.py",
+    tags = ["requires-docker", "integration"],
+    data = [
+        "alembic.ini",
+        "migrations/script.py.mako",
+    ],
+    deps = [
+        ":flow_backend_lib",
+        "@pypi//alembic",
+        "@pypi//sqlalchemy",
+        "@pypi//testcontainers",
+        "@pypi//psycopg2_binary",
     ],
 )

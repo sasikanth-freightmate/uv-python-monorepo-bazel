@@ -31,6 +31,7 @@ services:
       - bazel_cache:/home/vscode/.cache/bazel
       - bazelisk_cache:/home/vscode/.cache/bazelisk
       - vscode-server:/home/vscode/.vscode-server
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - freightmate
     command: sleep infinity
