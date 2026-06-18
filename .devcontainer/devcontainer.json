@@ -9,7 +9,8 @@
     "bazel-check": "bazelisk version",
     "python-check": "python3 --version",
     "venv": "bazelisk run //:venv",
-    "tmux": "tmux -V"
+    "tmux": "tmux -V",
+    "docker.sock": "sudo chown -R vscode:vscode /var/run/docker.sock"
   },
   "features": {
     "ghcr.io/duduribeiro/devcontainer-features/tmux:1": {}
