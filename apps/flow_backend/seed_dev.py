@@ -74,7 +74,12 @@ def main() -> None:
             "It is set in the devcontainer; export it if running elsewhere."
         )
     asyncio.run(_seed(db_url))
-    logger.info("Seeded dev account — email=%s password=%s org=%s (admin)", DEV_EMAIL, DEV_PASSWORD, DEV_ORG_NAME)
+    logger.info(
+        "Seeded dev account — email=%s password=%s org=%s (admin)",
+        DEV_EMAIL,
+        DEV_PASSWORD,
+        DEV_ORG_NAME,
+    )
 
 
 if __name__ == "__main__":

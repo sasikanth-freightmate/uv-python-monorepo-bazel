@@ -42,6 +42,19 @@
       "type": "shell",
       "command": "bazel run //apps/flow_backend:migrate",
       "problemMatcher": []
+    },
+    {
+      "label": "Flow Backend (API)",
+      "type": "shell",
+      "command": "ibazel run //apps/flow_backend -- --role api",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Flow UI",
+      "type": "shell",
+      "command": "ibazel run //apps/flow-ui:start",
+      "problemMatcher":[]
     }
   ]
 }

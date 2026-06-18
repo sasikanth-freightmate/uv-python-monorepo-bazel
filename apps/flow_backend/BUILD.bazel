@@ -23,6 +23,9 @@ py_library(
         "api/workflows/__init__.py",
         "api/workflows/endpoints.py",
         "api/workflows/schemas.py",
+        "api/node_types/__init__.py",
+        "api/node_types/endpoints.py",
+        "api/node_types/schemas.py",
         # domain layer
         "domain/__init__.py",
         "domain/shared/__init__.py",
@@ -36,11 +39,18 @@ py_library(
         "domain/workflows/exceptions.py",
         "domain/workflows/models.py",
         "domain/workflows/repositories.py",
+        "domain/node_types/__init__.py",
+        "domain/node_types/models.py",
+        "domain/node_types/repositories.py",
+        "domain/node_types/catalog.py",
         # application layer
         "application/__init__.py",
         "application/workflows/__init__.py",
         "application/workflows/unit_of_work.py",
         "application/workflows/use_cases.py",
+        "application/node_types/__init__.py",
+        "application/node_types/unit_of_work.py",
+        "application/node_types/use_cases.py",
         # infrastructure layer
         "infrastructure/__init__.py",
         "infrastructure/database.py",
@@ -60,10 +70,14 @@ py_library(
         "infrastructure/workflows/__init__.py",
         "infrastructure/workflows/orm.py",
         "infrastructure/workflows/repositories.py",
+        "infrastructure/node_types/__init__.py",
+        "infrastructure/node_types/orm.py",
+        "infrastructure/node_types/repositories.py",
         # containers
         "containers/__init__.py",
         "containers/identity.py",
         "containers/workflows.py",
+        "containers/node_types.py",
         # migrations
         "migrations/__init__.py",
         "migrations/env.py",
@@ -78,14 +92,14 @@ py_library(
     deps = [
         "//packages/common",
         "//packages/service",
+        "@pypi//alembic",
+        "@pypi//asyncpg",
         "@pypi//dependency_injector",
         "@pypi//fastapi",
         "@pypi//pydantic",
         "@pypi//pydantic_settings",
-        "@pypi//sqlalchemy",
-        "@pypi//asyncpg",
-        "@pypi//alembic",
         "@pypi//pyjwt",
+        "@pypi//sqlalchemy",
     ],
 )
 
@@ -102,12 +116,12 @@ py_binary(
 py_binary(
     name = "migrate",
     srcs = ["migrate.py"],
-    main = "migrate.py",
-    visibility = ["//visibility:public"],
     data = [
         "alembic.ini",
         "migrations/script.py.mako",
     ],
+    main = "migrate.py",
+    visibility = ["//visibility:public"],
     deps = [":flow_backend_lib"],
 )
 
@@ -159,18 +173,21 @@ py_test(
 py_test(
     name = "migrations_test",
     srcs = ["tests/integration/test_migrations.py"],
-    main = "tests/integration/test_migrations.py",
-    tags = ["requires-docker", "integration"],
     data = [
         "alembic.ini",
         "migrations/script.py.mako",
     ],
+    main = "tests/integration/test_migrations.py",
+    tags = [
+        "integration",
+        "requires-docker",
+    ],
     deps = [
         ":flow_backend_lib",
         "@pypi//alembic",
+        "@pypi//psycopg2_binary",
         "@pypi//sqlalchemy",
         "@pypi//testcontainers",
-        "@pypi//psycopg2_binary",
     ],
 )
 
@@ -186,20 +203,53 @@ py_test(
 )
 
 py_test(
-    name = "auth_integration_test",
-    srcs = ["tests/integration/test_auth.py"],
-    main = "tests/integration/test_auth.py",
-    tags = ["requires-docker", "integration"],
+    name = "node_types_unit_test",
+    srcs = ["tests/unit/domain/node_types/test_output_spec.py"],
+    main = "tests/unit/domain/node_types/test_output_spec.py",
+    tags = ["unit"],
+    deps = [":flow_backend_lib"],
+)
+
+py_test(
+    name = "node_types_integration_test",
+    srcs = ["tests/integration/test_node_types.py"],
     data = [
         "alembic.ini",
         "migrations/script.py.mako",
     ],
+    main = "tests/integration/test_node_types.py",
+    tags = [
+        "integration",
+        "requires-docker",
+    ],
     deps = [
         ":flow_backend_lib",
         "@pypi//alembic",
+        "@pypi//httpx",
+        "@pypi//psycopg2_binary",
         "@pypi//sqlalchemy",
         "@pypi//testcontainers",
-        "@pypi//psycopg2_binary",
+    ],
+)
+
+py_test(
+    name = "auth_integration_test",
+    srcs = ["tests/integration/test_auth.py"],
+    data = [
+        "alembic.ini",
+        "migrations/script.py.mako",
+    ],
+    main = "tests/integration/test_auth.py",
+    tags = [
+        "integration",
+        "requires-docker",
+    ],
+    deps = [
+        ":flow_backend_lib",
+        "@pypi//alembic",
         "@pypi//httpx",
+        "@pypi//psycopg2_binary",
+        "@pypi//sqlalchemy",
+        "@pypi//testcontainers",
     ],
 )

@@ -14,6 +14,7 @@ import {
   FIELD_DEFS, OUTPUT_FIELDS,
 } from './data.js'
 import { fetchMe, getActiveOrg, logout, setActiveOrg } from '../../lib/auth.js'
+import { buildNodeRegistry, fetchNodeTypes } from '../../lib/nodeTypes.js'
 
 const { Grid, Flow, Template, HistoryGlyph, Versions, Plug, Bolt, Play, Check, Alert, TrendUp } = Glyph
 
@@ -44,6 +45,9 @@ export default class FlowApp extends Component {
       toast: null,
       nodes: INITIAL_NODES,
       edges: INITIAL_EDGES,
+      // Node-type registry fetched from the backend (ADR-0009). null until
+      // loaded; the bundled static catalog is used as a fallback meanwhile.
+      nodeReg: null,
     }
     this._rf = null            // React Flow instance (editor canvas)
     this._clipboard = null     // copy/paste buffer: { nodes, edges }
@@ -65,7 +69,28 @@ export default class FlowApp extends Component {
     window.addEventListener('keydown', this._onKey)
     this.seedRuns()
     this.ensureActiveOrg()
+    this.loadNodeTypes()
   }
+
+  // Source node-type metadata (palette, config-field schemas, declared outputs)
+  // from the backend registry. On any failure the editor keeps the bundled
+  // static catalog (see the _nodeDef / _fieldDefs / _paletteGroups accessors),
+  // so it stays usable offline or against an older backend.
+  async loadNodeTypes() {
+    try {
+      const manifests = await fetchNodeTypes()
+      if (Array.isArray(manifests) && manifests.length) {
+        this.setState({ nodeReg: buildNodeRegistry(manifests) })
+      }
+    } catch {
+      // Fallback to the static catalog; apiFetch already handles 401 redirects.
+    }
+  }
+
+  // ---------- node-type registry accessors (backend-or-static) ----------
+  _nodeDef(type) { return this.state.nodeReg?.nodeDefs?.[type] || NODE_DEFS[type] }
+  _fieldDefs(type) { return this.state.nodeReg?.fieldDefs?.[type] || FIELD_DEFS[type] || [] }
+  _paletteGroups() { return this.state.nodeReg?.palette || PALETTE }
 
   // Middleware already gated the route on the session cookie, but the app still
   // needs an active org for the X-Org-Id header. On a cold load with no org
@@ -293,7 +318,16 @@ export default class FlowApp extends Component {
     }
     return res
   }
-  outputFieldsFor(node) { return OUTPUT_FIELDS[node.type === 'condition' ? 'cond' : node.type] || [] }
+  outputFieldsFor(node) {
+    const fallback = OUTPUT_FIELDS[node.type === 'condition' ? 'cond' : node.type] || []
+    const reg = this.state.nodeReg?.outputs?.[node.type]
+    if (!reg) return fallback
+    // The backend owns the output schema (path + type); merge in illustrative
+    // sample values from the bundled catalog by path for the Data tab.
+    const sampleByPath = {}
+    fallback.forEach((o) => { sampleByPath[o.path] = o.sample })
+    return reg.map((o) => ({ path: o.path, type: o.type, sample: sampleByPath[o.path] ?? '' }))
+  }
   tokensIn(str) {
     const re = /\{\{\s*([a-zA-Z0-9_]+)\.([a-zA-Z0-9_.]+)\s*\}\}/g; const out = []; let m
     while ((m = re.exec(String(str || '')))) out.push({ raw: m[0], slug: m[1], field: m[2] })
@@ -314,7 +348,7 @@ export default class FlowApp extends Component {
   // ---------- node ops ----------
   newId() { return 'n' + Math.random().toString(36).slice(2, 8) }
   _makeNode(type, x, y) {
-    const d = NODE_DEFS[type]
+    const d = this._nodeDef(type)
     return { id: this.newId(), slug: this.makeSlug(d.title), type, title: d.title, sub: d.sub, x, y, configured: (type === 'trigger' || type === 'condition' || type === 'delay' || type === 'filter'), config: {} }
   }
   addNode(type, atEdge) {
@@ -338,7 +372,7 @@ export default class FlowApp extends Component {
           node.x = last.x + 332; node.y = last.y
         } else { node.x = 80; node.y = 250 }
       }
-      this.setState({ nodes: this.state.nodes.concat([node]), edges, selectedId: node.id, selectedIds: [node.id], tab: 'settings', insertEdge: null, toast: 'Added “' + NODE_DEFS[type].title + '”' })
+      this.setState({ nodes: this.state.nodes.concat([node]), edges, selectedId: node.id, selectedIds: [node.id], tab: 'settings', insertEdge: null, toast: 'Added “' + this._nodeDef(type).title + '”' })
       this.flashToast()
     })
   }
@@ -346,7 +380,7 @@ export default class FlowApp extends Component {
   addNodeAt(type, pos) {
     this._commit(() => {
       const node = this._makeNode(type, pos.x, pos.y)
-      this.setState((s) => ({ nodes: s.nodes.concat([node]), selectedId: node.id, selectedIds: [node.id], tab: 'settings', insertEdge: null, toast: 'Added “' + NODE_DEFS[type].title + '”' }))
+      this.setState((s) => ({ nodes: s.nodes.concat([node]), selectedId: node.id, selectedIds: [node.id], tab: 'settings', insertEdge: null, toast: 'Added “' + this._nodeDef(type).title + '”' }))
       this.flashToast()
     })
   }
@@ -387,7 +421,7 @@ export default class FlowApp extends Component {
   }
   saveConfig(id) {
     this._commit(() => {
-      this.setState((s) => ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, configured: true, sub: NODE_DEFS[n.type].sub } : n)), toast: 'Step configured' }))
+      this.setState((s) => ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, configured: true, sub: this._nodeDef(n.type).sub } : n)), toast: 'Step configured' }))
       this.flashToast()
     })
   }
@@ -655,7 +689,7 @@ export default class FlowApp extends Component {
 
     // palette
     const q = s.paletteQuery.trim().toLowerCase()
-    const groups = PALETTE.map((g) => ({
+    const groups = this._paletteGroups().map((g) => ({
       title: g.title,
       items: g.items.filter((it) => !q || it.label.toLowerCase().includes(q) || it.desc.toLowerCase().includes(q)).map((it) => {
         const cat = NODE_CATEGORIES[it.cat]
@@ -692,12 +726,12 @@ export default class FlowApp extends Component {
 
   configVM(sel) {
     const s = this.state
-    const cat = NODE_CATEGORIES[NODE_DEFS[sel.type].cat]
+    const cat = NODE_CATEGORIES[this._nodeDef(sel.type).cat]
     const cfg = sel.config || {}
     const slugMap = {}; s.nodes.forEach((n) => { if (n.slug) slugMap[n.slug] = { label: n.title } })
     const ancIds = this.ancestorsOf(sel.id)
     const vars = s.nodes.filter((n) => ancIds.has(n.id)).map((n) => ({ slug: n.slug, label: n.title, fields: this.outputFieldsFor(n) }))
-    const fields = (FIELD_DEFS[sel.type] || []).map((f) => ({
+    const fields = this._fieldDefs(sel.type).map((f) => ({
       key: f.key, label: f.label, required: !!f.required, type: f.type, options: f.options || [],
       value: cfg[f.key] || '', placeholder: f.placeholder || '', help: f.help || '',
       fieldKey: sel.id + '::' + f.key, vars, slugMap,
@@ -708,7 +742,7 @@ export default class FlowApp extends Component {
     const samp = SAMPLES[sel.id] || { in: '{}', out: '{}' }
     const tab = s.tab || 'settings'
     return {
-      title: sel.title, typeLabel: TYPE_LABELS[sel.type] || 'Step', kind: NODE_DEFS[sel.type].kind, catColor: cat.c, catBg: cat.bg,
+      title: sel.title, typeLabel: TYPE_LABELS[sel.type] || 'Step', kind: this._nodeDef(sel.type).kind, catColor: cat.c, catBg: cat.bg,
       idLabel: sel.slug, needsSetup: !sel.configured, tab,
       tabs: [{ k: 'settings', label: 'Settings' }, { k: 'data', label: 'Data' }].map((t) => ({ k: t.k, label: t.label, active: tab === t.k, onClick: () => this.setState({ tab: t.k }) })),
       fields, slug: sel.slug, onCopySlug: () => this.copyText(sel.slug, 'Copied slug'),
@@ -774,7 +808,7 @@ export default class FlowApp extends Component {
     const sn = this.nodeById(s.selectedStep)
     if (!sn) return null
     const sst = stMap[s.selectedStep] || { st: 'skip' }
-    const cat = NODE_CATEGORIES[NODE_DEFS[sn.type].cat]
+    const cat = NODE_CATEGORIES[this._nodeDef(sn.type).cat]
     const stPal = ({ ok: { c: '#10905C', bg: '#E3F6EC', label: 'Completed' }, error: { c: '#CC3338', bg: '#FBE5E6', label: 'Failed' }, skip: { c: '#A0A6B0', bg: '#F1F2F4', label: 'Skipped' }, running: { c: '#0E6EFF', bg: '#E5F0FF', label: 'Running' } })[sst.st] || { c: '#A0A6B0', bg: '#F1F2F4', label: 'Skipped' }
     const samp = SAMPLES[sn.id] || { in: '{}', out: '{}' }
     const isErr = sst.st === 'error', isSkip = sst.st === 'skip'
@@ -802,7 +836,7 @@ export default class FlowApp extends Component {
     ]).map((l, i) => ({ ...l, bg: i % 2 ? '#FBFBFC' : '#fff' }))
 
     return {
-      title: sn.title, kind: NODE_DEFS[sn.type].kind, catColor: cat.c, catBg: cat.bg,
+      title: sn.title, kind: this._nodeDef(sn.type).kind, catColor: cat.c, catBg: cat.bg,
       statusColor: stPal.c, statusBg: stPal.bg, statusLabel: stPal.label, dur: sst.ms != null ? sst.ms + ' ms' : '—',
       hasError: isErr, errorTitle: sst.error || 'Error', errorMsg: sst.errorMsg || '',
       hasRefs: refs.length > 0, refs,
