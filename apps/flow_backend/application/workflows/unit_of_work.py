@@ -12,7 +12,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.flow_backend.domain.workflows.models import WorkflowDraft
+from apps.flow_backend.domain.workflows.models import Workflow
 from apps.flow_backend.domain.workflows.repositories import WorkflowRepository
 from apps.flow_backend.infrastructure.outbox.repository import OutboxRepository
 from apps.flow_backend.infrastructure.workflows.repositories import WorkflowSQLAlchemyRepository
@@ -25,7 +25,7 @@ class CollectingRepository:
         self._repo = repo
         self._seen = seen
 
-    def add(self, aggregate: WorkflowDraft) -> None:
+    def add(self, aggregate: Workflow) -> None:
         self._seen.append(aggregate)
         self._repo.add(aggregate)
 
@@ -34,6 +34,14 @@ class CollectingRepository:
         if result is not None:
             self._seen.append(result)
         return result
+
+    async def save_draft(self, aggregate: Workflow) -> None:
+        # The aggregate was already tracked by the preceding get(); its
+        # DraftSaved event is harvested at commit.
+        await self._repo.save_draft(aggregate)
+
+    async def update_metadata(self, aggregate: Workflow) -> None:
+        await self._repo.update_metadata(aggregate)
 
     async def list_by_tenant(self, *args: Any, **kwargs: Any) -> Any:
         return await self._repo.list_by_tenant(*args, **kwargs)
@@ -48,7 +56,7 @@ class WorkflowUnitOfWork:
         # also applies the RLS tenant variable on entry (infrastructure.database).
         self._session_cm = self._session_factory()
         self._session: AsyncSession = await self._session_cm.__aenter__()
-        self._seen: list[WorkflowDraft] = []
+        self._seen: list[Workflow] = []
         self.workflows: WorkflowRepository = CollectingRepository(  # type: ignore[assignment]
             WorkflowSQLAlchemyRepository(self._session),
             self._seen,

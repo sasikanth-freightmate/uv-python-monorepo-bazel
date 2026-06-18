@@ -233,6 +233,28 @@ py_test(
 )
 
 py_test(
+    name = "workflows_integration_test",
+    srcs = ["tests/integration/test_workflows.py"],
+    data = [
+        "alembic.ini",
+        "migrations/script.py.mako",
+    ],
+    main = "tests/integration/test_workflows.py",
+    tags = [
+        "integration",
+        "requires-docker",
+    ],
+    deps = [
+        ":flow_backend_lib",
+        "@pypi//alembic",
+        "@pypi//httpx",
+        "@pypi//psycopg2_binary",
+        "@pypi//sqlalchemy",
+        "@pypi//testcontainers",
+    ],
+)
+
+py_test(
     name = "auth_integration_test",
     srcs = ["tests/integration/test_auth.py"],
     data = [

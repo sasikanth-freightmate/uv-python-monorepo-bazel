@@ -21,7 +21,7 @@ class DomainEvent:
 
 
 @dataclass(frozen=True)
-class WorkflowDraftCreated(DomainEvent):
+class WorkflowCreated(DomainEvent):
     workflow_id: WorkflowId = field(default_factory=lambda: WorkflowId(uuid.uuid4()))
     tenant_id: TenantId = field(default_factory=lambda: TenantId(uuid.uuid4()))
     name: str = ""
@@ -36,15 +36,45 @@ class WorkflowDraftCreated(DomainEvent):
 
 
 @dataclass(frozen=True)
-class WorkflowPublished(DomainEvent):
+class DraftSaved(DomainEvent):
     workflow_id: WorkflowId = field(default_factory=lambda: WorkflowId(uuid.uuid4()))
     tenant_id: TenantId = field(default_factory=lambda: TenantId(uuid.uuid4()))
-    version: int = 1
+    draft_revision: int = 0
 
     def to_dict(self) -> dict:
         return {
             "workflow_id": str(self.workflow_id),
             "tenant_id": str(self.tenant_id),
-            "version": self.version,
+            "draft_revision": self.draft_revision,
+            "occurred_at": self.occurred_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True)
+class WorkflowRenamed(DomainEvent):
+    workflow_id: WorkflowId = field(default_factory=lambda: WorkflowId(uuid.uuid4()))
+    tenant_id: TenantId = field(default_factory=lambda: TenantId(uuid.uuid4()))
+    name: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "workflow_id": str(self.workflow_id),
+            "tenant_id": str(self.tenant_id),
+            "name": self.name,
+            "occurred_at": self.occurred_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True)
+class WorkflowArchivedChanged(DomainEvent):
+    workflow_id: WorkflowId = field(default_factory=lambda: WorkflowId(uuid.uuid4()))
+    tenant_id: TenantId = field(default_factory=lambda: TenantId(uuid.uuid4()))
+    archived: bool = False
+
+    def to_dict(self) -> dict:
+        return {
+            "workflow_id": str(self.workflow_id),
+            "tenant_id": str(self.tenant_id),
+            "archived": self.archived,
             "occurred_at": self.occurred_at.isoformat(),
         }

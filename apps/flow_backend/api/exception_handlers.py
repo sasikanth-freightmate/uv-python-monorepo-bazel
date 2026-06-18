@@ -17,6 +17,7 @@ from apps.flow_backend.domain.identity.exceptions import (
     MembershipNotFound,
     MissingActiveOrg,
 )
+from apps.flow_backend.domain.workflows.exceptions import StaleDraftRevision, WorkflowNotFound
 from packages.common.exceptions import InfrastructureUnavailable
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,18 @@ def register_handlers(app: FastAPI) -> None:
     @app.exception_handler(InsufficientRole)
     async def handle_role(request: Request, exc: InsufficientRole) -> JSONResponse:
         return JSONResponse(status_code=403, content={"code": "forbidden"})
+
+    @app.exception_handler(WorkflowNotFound)
+    async def handle_workflow_not_found(request: Request, exc: WorkflowNotFound) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"code": "workflow_not_found"})
+
+    @app.exception_handler(StaleDraftRevision)
+    async def handle_stale_draft(request: Request, exc: StaleDraftRevision) -> JSONResponse:
+        # Optimistic-concurrency loss (ADR-0007): a newer autosave won the race.
+        return JSONResponse(
+            status_code=409,
+            content={"code": "stale_draft_revision", "current_revision": exc.actual},
+        )
 
     @app.exception_handler(InfrastructureUnavailable)
     async def handle_infra_unavailable(request: Request, exc: InfrastructureUnavailable) -> JSONResponse:
