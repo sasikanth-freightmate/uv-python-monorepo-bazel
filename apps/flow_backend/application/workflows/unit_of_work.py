@@ -44,7 +44,10 @@ class WorkflowUnitOfWork:
         self._session_factory = session_factory
 
     async def __aenter__(self) -> WorkflowUnitOfWork:
-        self._session: AsyncSession = await self._session_factory().__aenter__()
+        # Hold the session context manager so __aexit__ can close it — the CM
+        # also applies the RLS tenant variable on entry (infrastructure.database).
+        self._session_cm = self._session_factory()
+        self._session: AsyncSession = await self._session_cm.__aenter__()
         self._seen: list[WorkflowDraft] = []
         self.workflows: WorkflowRepository = CollectingRepository(  # type: ignore[assignment]
             WorkflowSQLAlchemyRepository(self._session),
@@ -53,16 +56,18 @@ class WorkflowUnitOfWork:
         self._outbox = OutboxRepository(self._session)
         return self
 
-    async def __aexit__(self, exc_type: Any, *_: Any) -> None:
-        if exc_type:
-            await self._session.rollback()
-        else:
-            events = [e for agg in self._seen for e in agg.pop_events()]
-            for event in events:
-                self._outbox.add(
-                    event_type=type(event).__name__,
-                    payload=event.to_dict(),
-                    event_id=event.event_id,
-                )
-            await self._session.commit()
-        await self._session.close()
+    async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        try:
+            if exc_type:
+                await self._session.rollback()
+            else:
+                events = [e for agg in self._seen for e in agg.pop_events()]
+                for event in events:
+                    self._outbox.add(
+                        event_type=type(event).__name__,
+                        payload=event.to_dict(),
+                        event_id=event.event_id,
+                    )
+                await self._session.commit()
+        finally:
+            await self._session_cm.__aexit__(exc_type, exc, tb)

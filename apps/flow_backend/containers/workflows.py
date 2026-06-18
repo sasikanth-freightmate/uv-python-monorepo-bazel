@@ -11,6 +11,8 @@ class WorkflowsContainer(containers.DeclarativeContainer):
 
     uow = providers.Factory(WorkflowUnitOfWork, session_factory=db.provided.session)
 
-    create_draft = providers.Factory(CreateDraft, uow_factory=uow)
-    publish_workflow = providers.Factory(PublishWorkflow, uow_factory=uow)
-    get_workflow = providers.Factory(GetWorkflow, uow_factory=uow)
+    # Inject the provider itself (delegation via `.provider`) so each use case
+    # call constructs a fresh UoW — `uow` alone would inject a single instance.
+    create_draft = providers.Factory(CreateDraft, uow_factory=uow.provider)
+    publish_workflow = providers.Factory(PublishWorkflow, uow_factory=uow.provider)
+    get_workflow = providers.Factory(GetWorkflow, uow_factory=uow.provider)

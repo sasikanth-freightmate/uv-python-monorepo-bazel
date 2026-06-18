@@ -115,11 +115,11 @@ class MigrationsTest(unittest.TestCase):
         missing = expected - tables
         self.assertFalse(missing, f"Missing tables: {missing}")
 
-    def test_alembic_version_is_0002(self) -> None:
+    def test_alembic_version_is_head(self) -> None:
         with self._engine().connect() as conn:
             row = conn.execute(text("SELECT version_num FROM alembic_version")).fetchone()
         self.assertIsNotNone(row)
-        self.assertEqual(row[0], "0002")
+        self.assertEqual(row[0], "0004")
 
     def test_partitions_exist(self) -> None:
         """Monthly child partitions must be created for all four partitioned tables."""

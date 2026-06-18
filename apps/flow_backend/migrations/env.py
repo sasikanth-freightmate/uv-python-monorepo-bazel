@@ -3,11 +3,15 @@
 URL resolution order (first wins):
   1. ``context.config.attributes["db_url"]`` — injected by programmatic callers
      (e.g. tests) to avoid requiring all Settings fields at migration time.
-  2. ``Settings().database_url`` — standard path for CLI use; requires the full
+  2. ``MIGRATION_DATABASE_URL`` env — DDL/RLS setup needs a privileged owner role,
+     whereas the services connect as the least-privilege ``flow`` role
+     (``DATABASE_URL``). When set, migrations use this instead.
+  3. ``Settings().database_url`` — standard path for CLI use; requires the full
      set of env vars (DATABASE_URL etc.) to be present.
 """
 
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -27,6 +31,8 @@ target_metadata = Base.metadata
 def _get_url() -> str:
     if "db_url" in context.config.attributes:
         return str(context.config.attributes["db_url"])
+    if migration_url := os.environ.get("MIGRATION_DATABASE_URL"):
+        return migration_url
     from apps.flow_backend.config import Settings
 
     return str(Settings().database_url)

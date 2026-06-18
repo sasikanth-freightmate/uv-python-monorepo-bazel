@@ -38,6 +38,15 @@ class Settings(BaseServiceSettings):
     redis_url: RedisDsn
     temporal_address: str = "localhost:7233"
 
+    # Local email/password auth: we issue our own HS256 JWTs signed with this
+    # secret. Override in any real deployment.
+    jwt_secret: str = "dev-insecure-change-me"
+    jwt_ttl_seconds: int = 3600
+
+    # Mark the session cookie Secure (HTTPS-only). Off for local dev over plain
+    # HTTP; turn on in any deployment served over TLS.
+    cookie_secure: bool = False
+
 
 def parse_role(argv: list[str] | None = None) -> Role:
     """Parse the `--role` process arg into a Role (argparse rejects unknown roles)."""

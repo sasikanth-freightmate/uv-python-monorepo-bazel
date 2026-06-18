@@ -3,11 +3,11 @@
 - **Status:** Accepted
 - **Date:** 2026-06-16
 - **Deciders:** sasikanth
-- **Related:** ADR-0001 (Temporal), ADR-0004 (Redis/realtime), ADR-0010 (CEL), ADR-0011 (Cognito), ADR-0015 (monolith/entrypoints)
+- **Related:** ADR-0001 (Temporal), ADR-0004 (Redis/realtime), ADR-0010 (CEL), ADR-0011 (auth/multitenancy), ADR-0015 (monolith/entrypoints)
 
 ## Context
 
-`apps/flow-backend` (the modular monolith, ADR-0015) needs a language, an API framework, and a realtime transport for the `gateway`. Constraints: Temporal (ADR-0001), CEL as the expression substrate (ADR-0010), AWS dependencies (Cognito/KMS/S3), a TypeScript/Next.js frontend, and LLM-powered node executors (e.g. the document extractor, ADR-0014).
+`apps/flow-backend` (the modular monolith, ADR-0015) needs a language, an API framework, and a realtime transport for the `gateway`. Constraints: Temporal (ADR-0001), CEL as the expression substrate (ADR-0010), AWS dependencies (KMS/S3), a TypeScript/Next.js frontend, and LLM-powered node executors (e.g. the document extractor, ADR-0014).
 
 ## Decision
 
@@ -34,7 +34,7 @@
 - **CEL:** `cel-python` in the `evaluate` activity and the server-side `validate` endpoint (ADR-0010).
 - **DB:** SQLAlchemy (async) + `asyncpg`; Alembic migrations; RLS via `SET LOCAL` session var.
 - **Redis:** `redis-py` (async) for the bus and pub/sub.
-- **Auth:** Cognito JWT validation via JWKS.
+- **Auth:** local email/password; scrypt hashing (stdlib) + app-issued HS256 session JWT via `PyJWT` (ADR-0011).
 
 ## Consequences
 

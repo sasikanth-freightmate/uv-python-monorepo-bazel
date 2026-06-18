@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
+from apps.flow_backend.api.auth.endpoints import router as auth_router
 from apps.flow_backend.api.exception_handlers import register_handlers
 from apps.flow_backend.api.workflows.endpoints import router as workflows_router
 from apps.flow_backend.config import Settings
@@ -30,6 +31,7 @@ def build_app(settings: Settings | None = None) -> FastAPI:
     app = build_health_app(LABEL)
     app.container = container  # type: ignore[attr-defined]
     register_handlers(app)
+    app.include_router(auth_router, prefix="/api/v1")
     app.include_router(workflows_router, prefix="/api/v1")
     return app
 

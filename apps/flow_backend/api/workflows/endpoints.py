@@ -6,10 +6,12 @@ from typing import Annotated
 from dependency_injector.wiring import Provide, inject
 from fastapi import APIRouter, Depends
 
+from apps.flow_backend.api.auth.dependencies import get_tenant_context
 from apps.flow_backend.api.workflows.schemas import CreateDraftRequest, WorkflowResponse
 from apps.flow_backend.application.workflows.use_cases import CreateDraft, GetWorkflow, PublishWorkflow
 from apps.flow_backend.containers import ApplicationContainer
 from apps.flow_backend.domain.shared.value_objects import TenantId, WorkflowId
+from apps.flow_backend.infrastructure.auth.tenant_context import TenantContext
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
@@ -18,13 +20,13 @@ router = APIRouter(prefix="/workflows", tags=["workflows"])
 @inject
 async def create_draft(
     body: CreateDraftRequest,
-    tenant_id: uuid.UUID,
+    ctx: Annotated[TenantContext, Depends(get_tenant_context)],
     use_case: Annotated[CreateDraft, Depends(Provide[ApplicationContainer.workflows.create_draft])],
 ) -> dict:
     from apps.flow_backend.application.workflows.use_cases import CreateDraftCommand
 
     workflow_id = await use_case.execute(
-        CreateDraftCommand(tenant_id=TenantId(tenant_id), name=body.name, graph=body.graph)
+        CreateDraftCommand(tenant_id=TenantId(ctx.org_id), name=body.name, graph=body.graph)
     )
     return {"workflow_id": str(workflow_id)}
 
@@ -33,6 +35,7 @@ async def create_draft(
 @inject
 async def get_workflow(
     workflow_id: uuid.UUID,
+    ctx: Annotated[TenantContext, Depends(get_tenant_context)],
     use_case: Annotated[GetWorkflow, Depends(Provide[ApplicationContainer.workflows.get_workflow])],
 ) -> WorkflowResponse:
     workflow = await use_case.execute(WorkflowId(workflow_id))
@@ -51,10 +54,10 @@ async def get_workflow(
 @inject
 async def publish_workflow(
     workflow_id: uuid.UUID,
-    tenant_id: uuid.UUID,
+    ctx: Annotated[TenantContext, Depends(get_tenant_context)],
     use_case: Annotated[PublishWorkflow, Depends(Provide[ApplicationContainer.workflows.publish_workflow])],
 ) -> dict:
     from apps.flow_backend.application.workflows.use_cases import PublishWorkflowCommand
 
-    await use_case.execute(PublishWorkflowCommand(workflow_id=WorkflowId(workflow_id), tenant_id=TenantId(tenant_id)))
+    await use_case.execute(PublishWorkflowCommand(workflow_id=WorkflowId(workflow_id), tenant_id=TenantId(ctx.org_id)))
     return {"status": "published"}

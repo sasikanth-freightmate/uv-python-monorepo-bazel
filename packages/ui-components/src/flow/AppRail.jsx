@@ -3,7 +3,8 @@ import { cn } from '../lib/utils.js'
 
 // Left navigation rail. `items` is the nav model from the orchestrator:
 // { key, label, active, icon (a glyph component), onClick }.
-export function AppRail({ items = [], avatar = 'OM' }) {
+// `onLogout`, when provided, turns the avatar into a sign-out button.
+export function AppRail({ items = [], avatar = 'OM', onLogout }) {
   return (
     <div className="z-50 flex h-full w-[62px] flex-none flex-col items-center bg-[#0E1116] pb-[16px] pt-[14px]">
       <div className="mb-[16px] flex h-[36px] w-[36px] flex-none items-center justify-center rounded-[10px] bg-gradient-to-br from-[#6E7BF2] to-[#0E6EFF]">
@@ -32,9 +33,19 @@ export function AppRail({ items = [], avatar = 'OM' }) {
         })}
       </div>
       <div className="flex-1" />
-      <div className="flex h-[36px] w-[36px] flex-none items-center justify-center rounded-[11px] bg-[#262B33] text-[12.5px] font-bold text-white">
-        {avatar}
-      </div>
+      {onLogout ? (
+        <button
+          onClick={onLogout}
+          title="Sign out"
+          className="flex h-[36px] w-[36px] flex-none items-center justify-center rounded-[11px] border-none bg-[#262B33] text-[12.5px] font-bold text-white transition-colors hover:bg-[#333A44]"
+        >
+          {avatar}
+        </button>
+      ) : (
+        <div className="flex h-[36px] w-[36px] flex-none items-center justify-center rounded-[11px] bg-[#262B33] text-[12.5px] font-bold text-white">
+          {avatar}
+        </div>
+      )}
     </div>
   )
 }

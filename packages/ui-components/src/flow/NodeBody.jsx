@@ -220,6 +220,8 @@ export function VerNodeBody({ node, decor }) {
           <div className="mt-[2px] overflow-hidden text-ellipsis whitespace-nowrap text-[12px] leading-[1.3] text-[#98A0AB]">{node.summary}</div>
         </div>
       </div>
+
+      {node.type === 'condition' && <ConditionRows />}
     </div>
   )
 }

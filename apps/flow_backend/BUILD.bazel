@@ -16,6 +16,10 @@ py_library(
         # api layer
         "api/__init__.py",
         "api/exception_handlers.py",
+        "api/auth/__init__.py",
+        "api/auth/dependencies.py",
+        "api/auth/endpoints.py",
+        "api/auth/schemas.py",
         "api/workflows/__init__.py",
         "api/workflows/endpoints.py",
         "api/workflows/schemas.py",
@@ -23,6 +27,10 @@ py_library(
         "domain/__init__.py",
         "domain/shared/__init__.py",
         "domain/shared/value_objects.py",
+        "domain/identity/__init__.py",
+        "domain/identity/models.py",
+        "domain/identity/exceptions.py",
+        "domain/identity/repositories.py",
         "domain/workflows/__init__.py",
         "domain/workflows/events.py",
         "domain/workflows/exceptions.py",
@@ -36,6 +44,15 @@ py_library(
         # infrastructure layer
         "infrastructure/__init__.py",
         "infrastructure/database.py",
+        "infrastructure/auth/__init__.py",
+        "infrastructure/auth/tenant_context.py",
+        "infrastructure/auth/token_service.py",
+        "infrastructure/auth/password.py",
+        "infrastructure/identity/__init__.py",
+        "infrastructure/identity/orm.py",
+        "infrastructure/identity/repositories.py",
+        "infrastructure/identity/resolver.py",
+        "infrastructure/identity/auth_service.py",
         "infrastructure/outbox/__init__.py",
         "infrastructure/outbox/models.py",
         "infrastructure/outbox/repository.py",
@@ -45,6 +62,7 @@ py_library(
         "infrastructure/workflows/repositories.py",
         # containers
         "containers/__init__.py",
+        "containers/identity.py",
         "containers/workflows.py",
         # migrations
         "migrations/__init__.py",
@@ -52,6 +70,8 @@ py_library(
         "migrations/versions/__init__.py",
         "migrations/versions/0001_initial_schema.py",
         "migrations/versions/0002_full_schema.py",
+        "migrations/versions/0003_user_credentials.py",
+        "migrations/versions/0004_membership_lookup.py",
     ],
     imports = ["../.."],
     visibility = ["//visibility:public"],
@@ -65,6 +85,7 @@ py_library(
         "@pypi//sqlalchemy",
         "@pypi//asyncpg",
         "@pypi//alembic",
+        "@pypi//pyjwt",
     ],
 )
 
@@ -72,6 +93,30 @@ py_binary(
     name = "flow_backend",
     srcs = ["main.py"],
     main = "main.py",
+    visibility = ["//visibility:public"],
+    deps = [":flow_backend_lib"],
+)
+
+# Apply Alembic migrations: `bazel run //apps/flow_backend:migrate`.
+# Connects as the owner via MIGRATION_DATABASE_URL (see migrations/env.py).
+py_binary(
+    name = "migrate",
+    srcs = ["migrate.py"],
+    main = "migrate.py",
+    visibility = ["//visibility:public"],
+    data = [
+        "alembic.ini",
+        "migrations/script.py.mako",
+    ],
+    deps = [":flow_backend_lib"],
+)
+
+# Seed a dev account (org + user + admin membership): `bazel run //apps/flow_backend:seed_dev`.
+# Connects as the owner via MIGRATION_DATABASE_URL (bypasses RLS for the membership insert).
+py_binary(
+    name = "seed_dev",
+    srcs = ["seed_dev.py"],
+    main = "seed_dev.py",
     visibility = ["//visibility:public"],
     deps = [":flow_backend_lib"],
 )
@@ -126,5 +171,35 @@ py_test(
         "@pypi//sqlalchemy",
         "@pypi//testcontainers",
         "@pypi//psycopg2_binary",
+    ],
+)
+
+py_test(
+    name = "auth_unit_test",
+    srcs = ["tests/unit/auth/test_auth.py"],
+    main = "tests/unit/auth/test_auth.py",
+    tags = ["unit"],
+    deps = [
+        ":flow_backend_lib",
+        "@pypi//pyjwt",
+    ],
+)
+
+py_test(
+    name = "auth_integration_test",
+    srcs = ["tests/integration/test_auth.py"],
+    main = "tests/integration/test_auth.py",
+    tags = ["requires-docker", "integration"],
+    data = [
+        "alembic.ini",
+        "migrations/script.py.mako",
+    ],
+    deps = [
+        ":flow_backend_lib",
+        "@pypi//alembic",
+        "@pypi//sqlalchemy",
+        "@pypi//testcontainers",
+        "@pypi//psycopg2_binary",
+        "@pypi//httpx",
     ],
 )

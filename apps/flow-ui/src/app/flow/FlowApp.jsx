@@ -13,6 +13,7 @@ import {
   PALETTE, WORKFLOWS, HISTORY, VERSIONS, INITIAL_NODES, INITIAL_EDGES, SAMPLES,
   FIELD_DEFS, OUTPUT_FIELDS,
 } from './data.js'
+import { fetchMe, getActiveOrg, logout, setActiveOrg } from '../../lib/auth.js'
 
 const { Grid, Flow, Template, HistoryGlyph, Versions, Plug, Bolt, Play, Check, Alert, TrendUp } = Glyph
 
@@ -63,6 +64,21 @@ export default class FlowApp extends Component {
   componentDidMount() {
     window.addEventListener('keydown', this._onKey)
     this.seedRuns()
+    this.ensureActiveOrg()
+  }
+
+  // Middleware already gated the route on the session cookie, but the app still
+  // needs an active org for the X-Org-Id header. On a cold load with no org
+  // cookie, resolve it from /me (first workspace) or send the user to /login.
+  async ensureActiveOrg() {
+    if (getActiveOrg()) return
+    try {
+      const me = await fetchMe()
+      if (me.memberships?.length) setActiveOrg(me.memberships[0].org_id)
+      else window.location.href = '/login'
+    } catch {
+      // apiFetch already redirects to /login on a 401.
+    }
   }
   componentWillUnmount() {
     window.removeEventListener('keydown', this._onKey)
@@ -878,7 +894,7 @@ export default class FlowApp extends Component {
     const s = this.state
     return (
       <div className="flex h-screen w-full overflow-hidden bg-[#F4F5F7]">
-        <AppRail items={vm.navItems} />
+        <AppRail items={vm.navItems} onLogout={() => logout()} />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {(s.view === 'editor' || s.view === 'run') && <WorkflowTopBar vm={vm.topBarVM} />}
           {vm.showPageBar && <PageTopBar {...vm.pageBarVM} />}

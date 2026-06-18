@@ -6,7 +6,11 @@ services:
     environment:
       - ENV=development
       - USE_BAZEL_VERSION=9.1.0
-      - DATABASE_URL=postgresql+asyncpg://freightmate:freightmate@postgres:5432/freightmate
+      # Services connect as the least-privilege `flow` role so RLS is enforced
+      # (ADR-0011). Migrations auto-use MIGRATION_DATABASE_URL (the owner) — see
+      # migrations/env.py — so DDL/role setup keeps working.
+      - DATABASE_URL=postgresql+asyncpg://flow:flow@postgres:5432/freightmate
+      - MIGRATION_DATABASE_URL=postgresql+asyncpg://freightmate:freightmate@postgres:5432/freightmate
       - REDIS_URL=redis://redis:6379/0
       - TEMPORAL_ADDRESS=temporal:7233
       - AWS_ENDPOINT_URL=http://localstack:4566
@@ -20,6 +24,8 @@ services:
         condition: service_healthy
       temporal:
         condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
     volumes:
       - ../:/workspaces/fm-flow
       - ~/.ssh:/home/vscode/.ssh
@@ -28,6 +34,7 @@ services:
       - ~/.claude.json:/home/vscode/.claude.json
       - ~/.bash_history:/home/vscode/.bash_history
       - ~/.zsh_history:/home/vscode/.zsh_history
+      - ~/.aws:/home/vscode/.aws
       - bazel_cache:/home/vscode/.cache/bazel
       - bazelisk_cache:/home/vscode/.cache/bazelisk
       - vscode-server:/home/vscode/.vscode-server
@@ -52,6 +59,33 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  # One-shot init container: applies every *.sql in postgres-init/ (sorted), then
+  # exits. The postgres /docker-entrypoint-initdb.d hook only runs on a *fresh*
+  # data dir, so this re-applies them on every `up` — drop new idempotent scripts
+  # into the folder and they run automatically. `dev` waits on it.
+  db-init:
+    image: postgres:17
+    environment:
+      - PGPASSWORD=freightmate
+    volumes:
+      - ./postgres-init:/scripts:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["sh", "-c"]
+    # `command` MUST be a single-element list here: with an exec-form entrypoint,
+    # a *string* command gets word-split and each word appended as its own arg, so
+    # `sh -c` would receive only "for" as its script (hence "Bad for loop variable").
+    command:
+      - |
+        for f in /scripts/*.sql; do
+          echo "db-init: applying $$f"
+          psql -h postgres -U freightmate -d freightmate -v ON_ERROR_STOP=1 -f "$$f" || exit 1
+        done
+    restart: "no"
+    networks:
+      - freightmate
 
   redis:
     image: redis:7

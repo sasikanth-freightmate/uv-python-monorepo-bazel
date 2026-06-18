@@ -10,3 +10,4 @@ asyncpg
 alembic
 testcontainers[postgres]
 psycopg2-binary
+pyjwt[crypto]

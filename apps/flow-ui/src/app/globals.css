@@ -31,3 +31,7 @@ body {
 }
 input, textarea, select, button { font-family: inherit; }
 ::selection { background: #cfe1ff; }
+
+/* Login: spinner on the submit button, floating blob on the brand panel. */
+@keyframes fmspin { to { transform: rotate(360deg); } }
+@keyframes fmfloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }

@@ -7,6 +7,7 @@ are added here as bounded contexts are implemented — see containers/*.
 from dependency_injector import containers, providers
 
 from apps.flow_backend.config import Settings
+from apps.flow_backend.containers.identity import IdentityContainer
 from apps.flow_backend.containers.workflows import WorkflowsContainer
 from apps.flow_backend.infrastructure.database import Database
 from apps.flow_backend.infrastructure.outbox.relay import OutboxRelay
@@ -31,5 +32,7 @@ class ApplicationContainer(containers.DeclarativeContainer):
         session_factory=db.provided.session,
         publish=_noop_publish,
     )
+
+    identity = providers.Container(IdentityContainer, db=db, settings=settings)
 
     workflows = providers.Container(WorkflowsContainer, db=db)

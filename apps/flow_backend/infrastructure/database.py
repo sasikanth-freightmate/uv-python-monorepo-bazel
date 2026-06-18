@@ -1,8 +1,11 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+
+from apps.flow_backend.infrastructure.auth.tenant_context import current_org_id
 
 
 class Base(DeclarativeBase):
@@ -26,6 +29,15 @@ class Database:
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:
         async with self._session_factory() as session:
+            org_id = current_org_id()
+            if org_id is not None:
+                # Transaction-scoped (is_local=True) RLS variable. set_config is
+                # the parameterised, injection-safe equivalent of SET LOCAL and
+                # auto-clears on commit, so pooled connections return clean.
+                await session.execute(
+                    text("SELECT set_config('app.tenant_id', :org, true)"),
+                    {"org": str(org_id)},
+                )
             yield session
 
     async def dispose(self) -> None:

@@ -14,7 +14,7 @@ The build must stay correct and shippable at every step. We want confidence from
 ### Every PR ships tests and stays green
 
 - **Unit tests** for pure logic (DAG walk, CEL evaluation, validation, read-model projection, sticky bucketing, version selection) — exercised directly, no mocks (the logic is pure).
-- **Integration tests** against **real dependencies via [Testcontainers]**: Postgres, Redis, Temporal (the official test server), S3/KMS (LocalStack), and a JWKS issuer fixture for Cognito-style tokens.
+- **Integration tests** against **real dependencies via [Testcontainers]**: Postgres, Redis, Temporal (the official test server), and S3/KMS (LocalStack). Auth is exercised end to end through the app's own register/login (app-issued session tokens — no external issuer to fake).
 - **CI runs unit + integration on every push**; `main` is always deployable; **each PR leaves the whole system in a running, tested state**.
 - Coverage is judged by **shipped-path exercise**, not a vanity percentage — every code path a PR introduces is tested.
 

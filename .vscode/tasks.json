@@ -36,6 +36,12 @@
         "runOn": "folderOpen"
       },
       "problemMatcher": []
+    },
+    {
+      "label": "Flow DB: Apply migrations",
+      "type": "shell",
+      "command": "bazel run //apps/flow_backend:migrate",
+      "problemMatcher": []
     }
   ]
 }
